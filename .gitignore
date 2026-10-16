@@ -1,0 +1,6 @@
+data/cache/
+data/*_full.json
+public/
+prototype-web/dist/
+__pycache__/
+node_modules/

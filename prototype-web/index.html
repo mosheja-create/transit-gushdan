@@ -1,0 +1,1222 @@
+<title>תחבורה ציבורית מותאמת אישית</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Hebrew:wght@400;500;600&family=Rubik:wght@500;700&display=swap">
+<style>
+/* Layout: two panes — planner column (search, preferences, alternatives) beside a route sheet (segment list + schematic map); one column on phones. */
+:root {
+  --bg: #eef2f0;
+  --surface: #ffffff;
+  --sunken: #e3e9e6;
+  --ink: #14201c;
+  --muted: #586863;
+  --rule: #d3dcd8;
+  --accent: #0b6a4c;
+  --accent-ink: #ffffff;
+  --accent-soft: #d8ece4;
+  --bus: #1d8a4e;
+  --lrt: #c8243a;
+  --rail: #1c5ba8;
+  --taxi: #8a5a12;
+  --walk: #7d8a85;
+  --wait: #c98a00;
+  --personal: #6b3fb0;
+  --personal-soft: #ebe2f7;
+  --est-soft: #f5ecd6;
+  --plan-soft: #e1ebf5;
+  --warn-soft: #fbeedd;
+  --warn-ink: #7a4a00;
+  --font-display: "Rubik", "Heebo", "Arial Hebrew", sans-serif;
+  --font-body: "IBM Plex Sans Hebrew", "Heebo", "Arial Hebrew", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1412; --surface: #161f1c; --sunken: #1f2a26; --ink: #e6eeea; --muted: #97a8a2; --rule: #2b3833;
+    --accent: #3cbf8c; --accent-ink: #06150f; --accent-soft: #173a2d;
+    --bus: #3dbd74; --lrt: #ff5b6f; --rail: #5c9cf0; --taxi: #d9a24a; --walk: #8d9b96; --wait: #f0b62e;
+    --personal: #b994f2; --personal-soft: #2d2140; --est-soft: #3a3016; --plan-soft: #1a2a3d;
+    --warn-soft: #3a2a10; --warn-ink: #f6c97a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1412; --surface: #161f1c; --sunken: #1f2a26; --ink: #e6eeea; --muted: #97a8a2; --rule: #2b3833;
+  --accent: #3cbf8c; --accent-ink: #06150f; --accent-soft: #173a2d;
+  --bus: #3dbd74; --lrt: #ff5b6f; --rail: #5c9cf0; --taxi: #d9a24a; --walk: #8d9b96; --wait: #f0b62e;
+  --personal: #b994f2; --personal-soft: #2d2140; --est-soft: #3a3016; --plan-soft: #1a2a3d;
+  --warn-soft: #3a2a10; --warn-ink: #f6c97a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.app { max-width: 1200px; margin: 0 auto; padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
+header.top h1 { font-family: var(--font-display); font-weight: 700; font-size: 1.55rem; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sample-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; color: var(--warn-ink); background: var(--warn-soft); border-radius: 999px; padding: 3px 10px; }
+
+.layout { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 960px) { .layout { grid-template-columns: minmax(360px, 420px) 1fr; align-items: start; } .sheet { position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)); } }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px; min-width: 0; }
+.panel h2 { font-family: var(--font-display); font-weight: 500; font-size: 1rem; margin: 0 0 12px; }
+
+/* search */
+.od { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.od-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.field { display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; }
+.field .pin { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 0.8rem; color: var(--accent-ink); background: var(--accent); }
+.field .pin.to { background: var(--ink); color: var(--surface); }
+select, input[type="date"], input[type="time"] { font: inherit; color: var(--ink); background: var(--sunken); border: 1px solid transparent; border-radius: 8px; padding: 9px 10px; width: 100%; min-width: 0; }
+select:focus-visible, input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.swap { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; display: grid; place-items: center; }
+.swap:hover { background: var(--sunken); }
+.saved { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip-btn { font: inherit; font-size: 0.85rem; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.chip-btn:hover { border-color: var(--accent); }
+.when { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px; margin-top: 12px; align-items: center; }
+@media (max-width: 420px) { .when { grid-template-columns: 1fr 1fr; } .seg { grid-column: 1 / -1; } }
+.seg { display: inline-flex; background: var(--sunken); border-radius: 8px; padding: 3px; }
+.seg button { font: inherit; font-size: 0.88rem; border: 0; background: transparent; color: var(--muted); padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+details.prefs summary { cursor: pointer; font-family: var(--font-display); font-weight: 500; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+details.prefs summary::-webkit-details-marker { display: none; }
+details.prefs summary .hint { font-family: var(--font-body); font-size: 0.82rem; color: var(--muted); font-weight: 400; }
+.pref-grid { display: grid; gap: 14px; margin-top: 14px; }
+.pref-row label.lbl { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+.pref-row .seg { width: 100%; }
+.pref-row .seg button { flex: 1; }
+.toggle { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 8px; background: var(--personal-soft); cursor: pointer; }
+.toggle input { margin-top: 4px; accent-color: var(--personal); width: 18px; height: 18px; flex: none; }
+.toggle b { display: block; font-weight: 600; }
+.toggle span { font-size: 0.85rem; color: var(--muted); }
+
+/* results */
+.results-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 2px 2px 0; }
+.results-head h2 { font-family: var(--font-display); font-weight: 500; font-size: 1rem; margin: 0; }
+.results-head span { font-size: 0.82rem; color: var(--muted); }
+.routes { display: flex; flex-direction: column; gap: 10px; }
+.route { text-align: start; font: inherit; color: inherit; width: 100%; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 10px; }
+.route:hover { border-color: var(--muted); }
+.route[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.route .row1 { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--sunken); color: var(--muted); }
+.tag.rec { background: var(--accent); color: var(--accent-ink); }
+.total { text-align: end; white-space: nowrap; }
+.total .big { font-family: var(--font-num); font-weight: 600; font-size: 1.45rem; line-height: 1; }
+.total .unit { font-size: 0.8rem; color: var(--muted); margin-inline-start: 2px; }
+.times { font-size: 0.88rem; color: var(--muted); }
+.times b { color: var(--ink); font-weight: 600; }
+.bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; background: transparent; }
+.bar i { display: block; min-width: 3px; }
+.bar i.walk, .bar i.xfer { background: repeating-linear-gradient(90deg, var(--walk) 0 4px, transparent 4px 7px); }
+.bar i.wait { background: var(--wait); opacity: .55; }
+.lines { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.line-chip { display: inline-flex; align-items: center; gap: 4px; color: #fff; font-weight: 600; border-radius: 6px; padding: 1px 7px 1px 6px; font-size: 0.82rem; }
+.line-chip svg { width: 14px; height: 14px; }
+.why { font-size: 0.85rem; color: var(--ink); background: var(--accent-soft); border-radius: 6px; padding: 6px 10px; }
+.conf { font-size: 0.8rem; color: var(--muted); }
+
+.notice { border-radius: var(--radius); padding: 16px; background: var(--warn-soft); color: var(--warn-ink); display: flex; flex-direction: column; gap: 10px; }
+.notice h3 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; color: var(--ink); }
+.notice p { margin: 0; color: var(--ink); }
+.btn { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 9px 14px; background: var(--accent); color: var(--accent-ink); cursor: pointer; align-self: flex-start; }
+
+/* sheet */
+.sheet-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px; margin-bottom: 6px; }
+.sheet-head h2 { margin: 0; }
+.leave { font-size: 0.9rem; }
+.leave b { font-family: var(--font-num); font-size: 1.05rem; }
+.steps { list-style: none; margin: 8px 0 0; padding: 0; }
+.step { display: grid; grid-template-columns: 52px 28px 1fr; gap: 0 10px; position: relative; }
+.step .clock { font-family: var(--font-num); font-size: 0.85rem; padding-top: 10px; color: var(--muted); }
+.step .rail { display: flex; flex-direction: column; align-items: center; }
+.step .rail .dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; margin-top: 8px; flex: none; color: #fff; }
+.step .rail .dot svg { width: 14px; height: 14px; }
+.step .rail .stem { flex: 1; width: 3px; min-height: 12px; margin-top: 2px; border-radius: 2px; }
+.step .rail .stem.walk { background: repeating-linear-gradient(180deg, var(--walk) 0 4px, transparent 4px 8px); }
+.step .rail .stem.wait { background: var(--wait); opacity: .5; }
+.step .body { padding: 8px 0 14px; border-bottom: 1px solid var(--rule); min-width: 0; }
+.step:last-child .body { border-bottom: 0; }
+.step .t { font-weight: 600; }
+.step .s { font-size: 0.85rem; color: var(--muted); }
+.step .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.dur { font-family: var(--font-num); font-size: 0.85rem; font-weight: 600; }
+.src { font-size: 0.72rem; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+.src.plan { background: var(--plan-soft); color: var(--rail); }
+.src.personal { background: var(--personal-soft); color: var(--personal); }
+.src.est { background: var(--est-soft); color: var(--warn-ink); }
+.src.calc { background: var(--sunken); color: var(--muted); }
+.src.live { background: var(--accent-soft); color: var(--accent); }
+.src.warn { background: var(--warn-soft); color: var(--warn-ink); }
+.sumcheck { margin-top: 10px; font-size: 0.85rem; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.sumcheck .ok { color: var(--accent); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.8rem; color: var(--muted); margin-top: 12px; align-items: center; }
+
+.map-wrap { margin-top: 14px; border-radius: 8px; background: var(--sunken); overflow: hidden; }
+.map-wrap svg { display: block; width: 100%; height: auto; }
+.map-cap { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+
+.dataset { display: flex; margin-bottom: 12px; }
+.dataset button { flex: 1; }
+input.place { font: inherit; color: var(--ink); background: var(--sunken); border: 1px solid transparent; border-radius: 8px; padding: 9px 10px; width: 100%; min-width: 0; }
+input.place:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sample-badge.real { color: var(--accent); background: var(--accent-soft); }
+footer.note { margin-top: 20px; font-size: 0.82rem; color: var(--muted); max-width: 70ch; }
+footer.note code { font-family: var(--font-num); font-size: 0.8rem; background: var(--sunken); padding: 0 4px; border-radius: 4px; }
+.empty { color: var(--muted); font-size: 0.9rem; }
+@media (prefers-reduced-motion: no-preference) { .route { transition: border-color .15s, box-shadow .15s; } }
+</style>
+
+<div class="app" dir="rtl" lang="he">
+  <header class="top">
+    <h1>תחבורה ציבורית מותאמת אישית</h1>
+    <span class="sample-badge" id="badge"></span>
+  </header>
+
+  <div class="layout">
+    <div class="col">
+      <section class="panel" aria-label="חיפוש מסלול">
+        <div class="seg dataset" role="group" aria-label="מקור נתונים" id="dataset">
+          <button type="button" data-v="tlv">תל אביב · נתונים אמיתיים</button>
+          <button type="button" data-v="sample">עיר דוגמה</button>
+        </div>
+        <div class="od">
+          <div class="od-fields">
+            <div class="field"><span class="pin" aria-hidden="true">מ</span><input class="place" id="from" list="place-list" aria-label="מוצא" placeholder="מאיפה? שם תחנה או מקום" autocomplete="off"></div>
+            <div class="field"><span class="pin to" aria-hidden="true">ל</span><input class="place" id="to" list="place-list" aria-label="יעד" placeholder="לאן? שם תחנה או מקום" autocomplete="off"></div>
+            <datalist id="place-list"></datalist>
+          </div>
+          <button class="swap" id="swap" type="button" aria-label="החלפת מוצא ויעד" title="החלפת מוצא ויעד">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/></svg>
+          </button>
+        </div>
+        <div class="saved" id="saved"></div>
+        <div class="when">
+          <div class="seg" role="group" aria-label="סוג זמן">
+            <button type="button" id="mode-depart" aria-pressed="true">יציאה ב־</button>
+            <button type="button" id="mode-arrive" aria-pressed="false">הגעה עד</button>
+          </div>
+          <input type="date" id="date" aria-label="תאריך">
+          <input type="time" id="time" aria-label="שעה" step="60">
+        </div>
+      </section>
+
+      <details class="panel prefs" id="prefs">
+        <summary>העדפות והתאמה אישית <span class="hint" id="pref-hint"></span></summary>
+        <div class="pref-grid">
+          <div class="pref-row">
+            <label class="lbl" id="lbl-walk">כמה ללכת ברגל</label>
+            <div class="seg" role="group" aria-labelledby="lbl-walk" id="walk-pref">
+              <button type="button" data-v="less">מעט</button>
+              <button type="button" data-v="normal">רגיל</button>
+              <button type="button" data-v="more">לא אכפת לי</button>
+            </div>
+          </div>
+          <div class="pref-row">
+            <label class="lbl" id="lbl-xfer">החלפות</label>
+            <div class="seg" role="group" aria-labelledby="lbl-xfer" id="xfer-pref">
+              <button type="button" data-v="0">לא משנה</button>
+              <button type="button" data-v="1">מעדיף פחות</button>
+              <button type="button" data-v="2">כמה שפחות</button>
+            </div>
+          </div>
+          <div class="pref-row">
+            <label class="lbl" for="pref-stop">תחנת החלפה מועדפת</label>
+            <select id="pref-stop"></select>
+          </div>
+          <label class="toggle" for="personal">
+            <input type="checkbox" id="personal">
+            <div><b>פרופיל אישי לדוגמה</b><span id="personal-desc"></span></div>
+          </label>
+        </div>
+      </details>
+
+      <div class="results-head"><h2>חלופות</h2><span id="results-meta"></span></div>
+      <div class="routes" id="routes" aria-live="polite"></div>
+    </div>
+
+    <section class="panel sheet" id="sheet" aria-label="פירוט המסלול"></section>
+  </div>
+
+  <footer class="note" id="note"></footer>
+</div>
+
+<script>
+/* =====================================================================
+   TransitDataProvider — the contract every data source implements.
+     id, name, isSample, coverage ({date, from, to} minutes) or null
+     stops()                -> [{id, name, x, y}]   (x,y in meters, local grid)
+     patterns(dateStr)      -> [{line, stops:[stopIndex], trips:[{id, times:[min]}]}]
+                               a trip may cover only part of the pattern: times outside it are Infinity
+     places()               -> named places: [{id, name, sub, x, y, saved}]
+     serviceStart(dateStr)  -> earliest departure minute that day
+   ===================================================================== */
+
+const TLV_DATA = /*__TLV_DATA__*/null;
+
+const SAMPLE_DATA = {
+  stops: [
+    { id: 'A', name: 'מסוף צפון', x: 3000, y: 5000 },
+    { id: 'B', name: 'שכונת הזית', x: 1500, y: 4500 },
+    { id: 'C', name: 'כיכר הדקל', x: 3000, y: 3500 },
+    { id: 'D', name: 'רכבת מערב', x: 500, y: 2500 },
+    { id: 'E', name: 'מרכז העיר', x: 3000, y: 2500 },
+    { id: 'F', name: 'השוק העירוני', x: 3600, y: 2300 },
+    { id: 'G', name: 'הספרייה', x: 4500, y: 2500 },
+    { id: 'H', name: 'פארק הנחל', x: 5500, y: 3500 },
+    { id: 'I', name: 'קניון הגפן', x: 4500, y: 1200 },
+    { id: 'J', name: 'בית החולים', x: 3000, y: 1000 },
+    { id: 'K', name: 'המכללה', x: 1500, y: 1200 },
+    { id: 'L', name: 'אזור התעשייה', x: 5800, y: 600 },
+    { id: 'M', name: 'רכבת מזרח', x: 6000, y: 2500 },
+    { id: 'N', name: 'רחוב התאנה', x: 2200, y: 2600 },
+    { id: 'O', name: 'שכונת הרימון', x: 1200, y: 3400 },
+    { id: 'P', name: 'רכבת מרכז', x: 3100, y: 2700 }
+  ],
+  lines: [
+    { id: 'R', label: 'אדום', mode: 'lrt', stops: ['A', 'C', 'E', 'G', 'I', 'L'], hops: [4, 3, 4, 4, 5], headway: 8 },
+    { id: 'T', label: 'רכבת', mode: 'rail', stops: ['D', 'P', 'M'], hops: [6, 7], headway: 20 },
+    { id: '1', label: '1', mode: 'bus', stops: ['B', 'O', 'N', 'E', 'F', 'G', 'H'], hops: [5, 5, 4, 3, 3, 5], headway: 12 },
+    { id: '12', label: '12', mode: 'bus', stops: ['D', 'K', 'J', 'I', 'L'], hops: [6, 5, 6, 5], headway: 15 },
+    { id: '7', label: '7', mode: 'bus', stops: ['A', 'H', 'M', 'I'], hops: [8, 6, 7], headway: 20 },
+    { id: '40', label: '40', mode: 'bus', stops: ['K', 'N', 'C', 'A'], hops: [7, 6, 5], headway: 20 }
+  ],
+  service: {
+    weekday: { bus: [330, 1420], lrt: [330, 1430], rail: [340, 1400] },
+    friday: { bus: [330, 930], lrt: [330, 960], rail: [340, 870] },
+    saturday: { bus: [1170, 1420], lrt: [1230, 1430], rail: [1200, 1400] }
+  },
+  places: [
+    { id: 'home', name: 'בית', sub: 'רח׳ השקד 14', x: 1750, y: 4250, saved: true },
+    { id: 'work', name: 'עבודה', sub: 'פארק ההייטק', x: 5650, y: 850, saved: true },
+    { id: 'gym', name: 'חדר כושר', sub: 'שד׳ הנחל 3', x: 5200, y: 3300, saved: true }
+  ]
+};
+
+function dayType(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const wd = new Date(y, m - 1, d).getDay();
+  return wd === 6 ? 'saturday' : wd === 5 ? 'friday' : 'weekday';
+}
+
+class SampleProvider {
+  constructor(data) {
+    this.data = data;
+    this.id = 'sample';
+    this.name = 'עיר דוגמה';
+    this.isSample = true;
+    this.coverage = null;
+    this.footpathMax = 700;
+    this._cache = new Map();
+  }
+  stops() { return this.data.stops; }
+  places() { return this.data.places; }
+  mapLines() {
+    const idx = new Map(this.data.stops.map((s, i) => [s.id, i]));
+    return this.data.lines.map(ln => ({ mode: ln.mode, stops: ln.stops.map(id => idx.get(id)) }));
+  }
+  serviceStart(dateStr) {
+    const w = this.data.service[dayType(dateStr)];
+    return Math.min(...Object.values(w).map(v => v[0]));
+  }
+  patterns(dateStr) {
+    const key = dayType(dateStr);
+    if (this._cache.has(key)) return this._cache.get(key);
+    const idx = new Map(this.data.stops.map((s, i) => [s.id, i]));
+    const out = [];
+    this.data.lines.forEach((ln, li) => {
+      const [first, last] = this.data.service[key][ln.mode];
+      for (const dir of [0, 1]) {
+        const seq = dir ? [...ln.stops].reverse() : ln.stops;
+        const hops = dir ? [...ln.hops].reverse() : ln.hops;
+        const cum = [0];
+        hops.forEach(h => cum.push(cum[cum.length - 1] + h));
+        const trips = [];
+        const offset = (li * 3 + dir * 5) % ln.headway;
+        for (let t = first + offset; t <= last; t += ln.headway) {
+          trips.push({ id: `${ln.id}-${dir}-${t}`, times: cum.map(c => t + c) });
+        }
+        const head = this.data.stops[idx.get(seq[seq.length - 1])].name;
+        out.push({ line: { id: ln.id, label: ln.label, mode: ln.mode, headsign: head, agency: '' }, dir, stops: seq.map(id => idx.get(id)), trips });
+      }
+    });
+    this._cache.set(key, out);
+    return out;
+  }
+}
+
+/* ------------------------------ real time ------------------------------ */
+/* A real-time source reports where a trip's vehicle was last seen. Trips are matched the way SIRI does it:
+     vehicle({ routeId, originDeparture }) -> { lat, lon, dist, at } or null
+   routeId is the GTFS route_id (SIRI LineRef); originDeparture is the trip's scheduled departure from its first
+   stop, in minutes after midnight of the data's date (OriginAimedDepartureTime). In the answer, dist is metres
+   from the trip's start and at is the minute the position was recorded. estimateLive() turns that into a delay.
+   Routing still runs on the schedule; a live estimate is shown next to it, marked with its source and time.
+   See docs/REALTIME.md. */
+class NoRealtime {
+  constructor() { this.status = { kind: 'off', text: 'אין חיבור לזמן אמת' }; }
+  vehicle() { return null; }
+}
+
+const TZ = 'Asia/Jerusalem';
+function tzOffsetMin(ms) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    .formatToParts(ms).map(x => [x.type, x.value]));
+  return Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - ms) / 60000);
+}
+// ms timestamp of 00:00 Israel time on dateStr
+function israelMidnight(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d) - tzOffsetMin(Date.UTC(y, m - 1, d)) * 60000;
+  return Date.UTC(y, m - 1, d) - tzOffsetMin(guess) * 60000;
+}
+const israelDate = ms => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(ms);
+const israelMinutes = ms => Math.floor((ms - israelMidnight(israelDate(ms))) / 60000);
+
+/* Vehicle positions from Open Bus Stride (the Public Knowledge Workshop), which stores the Ministry's SIRI feed
+   about every minute, roughly two minutes behind. A community service, not the Ministry's own: free, no key,
+   no guarantee. Only used when the schedule data is for today. One request per line, both time bounds given
+   (without them the API is slow). */
+class StrideRealtime {
+  constructor(dateStr, { base = 'https://open-bus-stride-api.hasadna.org.il', fetchFn = (...a) => fetch(...a), now = () => Date.now() } = {}) {
+    this.date = dateStr; this.base = base; this.fetch = fetchFn; this.now = now;
+    this.midnight = israelMidnight(dateStr);
+    this.lines = new Map(); // routeId -> { fetchedAt, rides: Map(originDeparture -> observation) }
+    this.lastSeen = null;
+    this.status = this.active() ? { kind: 'idle', text: 'זמן אמת: ממתין לנתונים' } : { kind: 'off', text: 'זמן אמת זמין רק ללוח הזמנים של היום' };
+  }
+  active() { return israelDate(this.now()) === this.date; }
+  nowMinute() { return (this.now() - this.midnight) / 60000; }
+  async refresh(routeIds) {
+    if (!this.active()) { this.status = { kind: 'off', text: 'זמן אמת זמין רק ללוח הזמנים של היום' }; return false; }
+    const t = this.now();
+    const todo = [...new Set(routeIds)].filter(id => { const c = this.lines.get(id); return !c || t - c.fetchedAt > 50000; });
+    if (!todo.length) return false;
+    const iso = ms => new Date(ms).toISOString().slice(0, 19) + 'Z';
+    const from = iso(t - 6 * 60000), to = iso(t + 60000);
+    const res = await Promise.allSettled(todo.map(id => this._line(id, from, to, t)));
+    const failed = res.filter(r => r.status === 'rejected').length;
+    if (failed === todo.length) this.status = { kind: 'error', text: 'זמן אמת: אין תשובה מ־Stride' };
+    else this.status = { kind: 'live', text: `זמן אמת: Open Bus Stride${this.lastSeen != null ? ` · מיקום אחרון מ־${clock(this.lastSeen)}` : ''}` };
+    return true;
+  }
+  async _line(id, from, to, t) {
+    const url = `${this.base}/siri_vehicle_locations/list?limit=500&recorded_at_time_from=${from}&recorded_at_time_to=${to}&siri_routes__line_ref=${encodeURIComponent(id)}`;
+    const r = await this.fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json();
+    if (!Array.isArray(rows)) throw new Error('unexpected answer');
+    const rides = new Map();
+    for (const v of rows) {
+      const origin = Math.round((Date.parse(v.siri_ride__scheduled_start_time) - this.midnight) / 60000);
+      const at = (Date.parse(v.recorded_at_time) - this.midnight) / 60000;
+      if (!Number.isFinite(origin) || !Number.isFinite(at) || at > this.nowMinute() + 2) continue; // the feed has some rows dated years ahead
+      const prev = rides.get(origin);
+      if (!prev || at > prev.at) rides.set(origin, { lat: v.lat, lon: v.lon, dist: v.distance_from_journey_start, at });
+      if (this.lastSeen == null || at > this.lastSeen) this.lastSeen = at;
+    }
+    this.lines.set(id, { fetchedAt: t, rides });
+  }
+  vehicle({ routeId, originDeparture }) {
+    const c = this.lines.get(routeId);
+    const v = c && c.rides.get(originDeparture);
+    return v && this.nowMinute() - v.at <= 6 ? v : null;
+  }
+}
+
+/* Where the vehicle is on its trip, against where the schedule says it should be when it was seen.
+   Uses distance along the route when the data has it (buses), otherwise the position projected onto the line
+   between stops (rail). Returns { expected, delay, at } for the boarding stop, { passed, delay, at } when the
+   vehicle is already past it, or null when the position cannot be placed on the trip. */
+function estimateLive(pat, trip, bi, v, cfg) {
+  const T = trip.times, n = pat.stops.length;
+  const origin = firstTime(trip) - pat.originOffset;
+  let prog = null, schedAt = null;
+  if (v.dist === 0 && pat.dists) {
+    // still at the first stop of the trip: late only if it should have left already
+    return { expected: T[bi] + Math.max(0, Math.round(v.at - origin)), delay: Math.max(0, Math.round(v.at - origin)), at: v.at };
+  }
+  if (pat.dists && Number.isFinite(v.dist)) {
+    const D = pat.dists;
+    if (v.dist <= D[0]) {
+      const f = D[0] > 0 ? v.dist / D[0] : 1;
+      schedAt = origin + f * (T[0] - origin); prog = f - 1;
+    } else {
+      let i = 0;
+      while (i < n - 2 && v.dist > D[i + 1]) i++;
+      const f = Math.min(1, (v.dist - D[i]) / Math.max(1, D[i + 1] - D[i]));
+      schedAt = T[i] + f * (T[i + 1] - T[i]); prog = i + f;
+    }
+  } else if (Number.isFinite(v.lat) && cfg.project) {
+    const P = cfg.project(v.lat, v.lon), S = cfg.stops;
+    let best = null;
+    for (let i = 0; i < n - 1; i++) {
+      const a = S[pat.stops[i]], b = S[pat.stops[i + 1]];
+      const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+      const f = L2 ? Math.max(0, Math.min(1, ((P.x - a.x) * dx + (P.y - a.y) * dy) / L2)) : 0;
+      const d = Math.hypot(a.x + f * dx - P.x, a.y + f * dy - P.y);
+      if (d > 600) continue;
+      const sAt = T[i] + f * (T[i + 1] - T[i]);
+      const score = Math.abs(sAt - v.at) + d / 100; // a route can pass the same place twice: prefer the plausible time
+      if (!best || score < best.score) best = { score, prog: i + f, schedAt: sAt };
+    }
+    if (!best) return null;
+    prog = best.prog; schedAt = best.schedAt;
+  } else return null;
+  const delay = Math.round(v.at - schedAt);
+  if (Math.abs(delay) > 90) return null; // not this trip, or bad data
+  if (prog > bi + 0.05) return { passed: true, delay, at: v.at };
+  return { expected: T[bi] + delay, delay, at: v.at };
+}
+
+/* A slice of the Ministry of Transport GTFS for one date: the stops inside one city and the rides that
+   call at them, plus (in full-day files built by scripts/build_gtfs_data.py) Israel Railways across the country.
+   Older files came through the Open Bus Stride API and cover only a time window. */
+class GtfsSliceProvider {
+  constructor(data, realtime = new NoRealtime()) {
+    this.data = data;
+    this.id = 'tlv';
+    this.name = data.city;
+    this.isSample = false;
+    this.footpathMax = 350;
+    this.realtime = realtime;
+    const [a, b] = data.window.split('-').map(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; });
+    // last minute a search may start at: a window that ends at midnight runs on past it, so the whole day is searchable
+    this.coverage = { date: data.date, from: a, to: b, last: b >= 1440 ? 1439 : b - 30, fullDay: a === 0 && b >= 1440 };
+    const lat0 = data.stops.reduce((s, x) => s + x[2], 0) / data.stops.length;
+    const lon0 = data.stops.reduce((s, x) => s + x[3], 0) / data.stops.length;
+    const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    this.project = (lat, lon) => ({ x: (lon - lon0) * kx, y: (lat - lat0) * ky });
+    this._stops = data.stops.map((s, i) => ({ id: String(s[0]), code: s[0], name: s[1].replace(/''/g, '״'), lat: s[2], lon: s[3], x: (s[3] - lon0) * kx, y: (s[2] - lat0) * ky }));
+    this._patterns = null;
+    this._places = this._buildPlaces();
+  }
+  stops() { return this._stops; }
+  places() { return this._places; }
+  mapLines() { return []; }
+  serviceStart() { return this.coverage.from; }
+  patterns() {
+    if (this._patterns) return this._patterns;
+    const MODES = { '0': 'lrt', '2': 'rail', '3': 'bus', '8': 'taxi' };
+    const routes = this.data.routes.map((r, i) => ({ id: 'r' + i, label: r[0], mode: MODES[r[1]] || 'bus', agency: r[2], headsign: r[3].replace(/''/g, '״'), routeId: r[4] || null }));
+    this._patterns = this.data.patterns.map((p, pi) => {
+      const stops = p.s.split('.').map(x => parseInt(x, 36));
+      // one base-36 digit per hop, or dot-separated numbers after a leading dot when a hop is 36 minutes or more
+      const deltas = p.d[0] === '.' ? p.d.slice(1).split('.').map(x => parseInt(x, 36)) : [...p.d].map(ch => parseInt(ch, 36));
+      const trips = p.t.split(' ').map((tok, ti) => {
+        const m = tok.match(/^(\d+)(?:@(\d+)-(\d+))?$/);
+        const t0 = Number(m[1]), i0 = m[2] ? Number(m[2]) : 0, i1 = m[3] ? Number(m[3]) : stops.length - 1;
+        const times = new Array(stops.length).fill(Infinity);
+        let t = t0;
+        for (let i = i0; i <= i1; i++) { times[i] = t; if (i < i1) t += deltas[i]; }
+        return { id: `p${pi}-${ti}`, times };
+      });
+      // full trips with the same running times never overtake, so sorted by start they are sorted at every stop
+      const sorted = !p.t.includes('@');
+      if (sorted) trips.sort((x, y) => x.times[0] - y.times[0]);
+      // metres from the trip's start to each stop, when the feed has them; used to place a live vehicle on the trip
+      const dists = p.m ? p.m.split('.').map(x => parseInt(x, 36) * 10) : null;
+      return { line: routes[p.r], dir: 0, stops, trips, sorted, originOffset: p.o || 0, dists };
+    });
+    return this._patterns;
+  }
+  _buildPlaces() {
+    const S = this._stops;
+    const near = (kw) => {
+      const m = S.filter(s => s.name.includes(kw));
+      if (!m.length) return null;
+      return { x: m.reduce((a, s) => a + s.x, 0) / m.length, y: m.reduce((a, s) => a + s.y, 0) / m.length };
+    };
+    const defs = [
+      ['azrieli', 'קניון עזריאלי', 'קניון עזריאלי'],
+      ['tau', 'אוניברסיטת תל אביב', 'אוניברסיטת ת״א'],
+      ['ichilov', 'בית החולים איכילוב', 'איכילוב'],
+      ['rabin', 'כיכר רבין', 'כיכר רבין'],
+      ['carmel', 'שוק הכרמל', 'שוק הכרמל'],
+      ['port', 'נמל תל אביב', 'נמל תל אביב'],
+      ['cbs', 'התחנה המרכזית החדשה', 'ת.מרכזית תל אביב'],
+      ['habima', 'הבימה', 'הבימה'],
+      ['dizengoff', 'דיזנגוף סנטר', 'דיזנגוף סנטר'],
+      ['jaffa', 'נמל יפו', 'נמל יפו'],
+      ['savidor', 'רכבת תל אביב מרכז', 'רכבת תל אביב מרכז'],
+      ['haifa', 'רכבת חיפה מרכז', 'רכבת חיפה מרכז'],
+      ['jerusalem', 'רכבת ירושלים יצחק נבון', 'רכבת ירושלים/יצחק נבון'],
+      ['airport', 'נמל התעופה בן גוריון', 'רכבת נתב״ג']
+    ];
+    return defs.map(([id, name, kw]) => { const c = near(kw); return c && { id, name, sub: 'לפי מיקום התחנות הקרובות', x: c.x, y: c.y, saved: true }; }).filter(Boolean);
+  }
+}
+
+/* ------------------------- routing engine ------------------------- */
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const DETOUR = 1.3;
+const walkMin = (d, speed) => Math.max(1, Math.ceil(d * DETOUR / speed));
+const netCache = new Map();
+
+function buildNetwork(provider, dateStr) {
+  const key = provider.id + ':' + (provider.coverage ? 'slice' : dayType(dateStr));
+  if (netCache.has(key)) return netCache.get(key);
+  const stops = provider.stops();
+  const patterns = provider.patterns(dateStr);
+  const stopPats = stops.map(() => []);
+  patterns.forEach((p, pi) => p.stops.forEach((s, pos) => stopPats[s].push([pi, pos])));
+  const max = provider.footpathMax;
+  const foot = stops.map((a, i) => {
+    const out = [];
+    for (let j = 0; j < stops.length; j++) {
+      if (j === i) continue;
+      const dx = Math.abs(a.x - stops[j].x); if (dx > max) continue;
+      const d = dist(a, stops[j]); if (d <= max) out.push({ to: j, dist: d });
+    }
+    return out;
+  });
+  const net = { stops, patterns, stopPats, foot };
+  netCache.set(key, net);
+  return net;
+}
+
+function earliestTrip(trips, pos, need, sorted) {
+  if (sorted) {
+    let lo = 0, hi = trips.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (trips[mid].times[pos] < need) lo = mid + 1; else hi = mid; }
+    return lo < trips.length ? trips[lo] : null;
+  }
+  let best = null;
+  for (const t of trips) { const v = t.times[pos]; if (v >= need && v < Infinity && (!best || v < best.times[pos])) best = t; }
+  return best;
+}
+
+function raptor(net, from, to, dep, cfg) {
+  const n = net.stops.length, INF = 1e9, K = cfg.maxRides;
+  const arr = [new Array(n).fill(INF)], lab = [new Array(n).fill(null)];
+  const best = new Array(n).fill(INF);
+  let marked = new Set();
+  net.stops.forEach((s, i) => {
+    const d = dist(from, s);
+    if (d <= cfg.maxWalk) {
+      const w = walkMin(d, cfg.speed);
+      arr[0][i] = best[i] = dep + w;
+      lab[0][i] = { kind: 'access', to: i, walk: w, dist: d };
+      marked.add(i);
+    }
+  });
+  for (let k = 1; k <= K; k++) {
+    arr[k] = arr[k - 1].slice();
+    lab[k] = lab[k - 1].slice();
+    const queue = new Map();
+    for (const s of marked) for (const [pi, pos] of net.stopPats[s]) {
+      if (!queue.has(pi) || pos < queue.get(pi)) queue.set(pi, pos);
+    }
+    const improved = new Set();
+    for (const [pi, pos0] of queue) {
+      const p = net.patterns[pi];
+      if (cfg.banned && cfg.banned.has(p.line.id)) continue;
+      let trip = null, bStop = -1, bIdx = -1;
+      for (let i = pos0; i < p.stops.length; i++) {
+        const s = p.stops[i];
+        if (trip) {
+          const a = trip.times[i];
+          if (a < arr[k][s] && a < best[s]) {
+            arr[k][s] = best[s] = a;
+            lab[k][s] = { kind: 'ride', pat: pi, trip, from: bStop, bi: bIdx, ai: i, prevK: k - 1 };
+            improved.add(s);
+          }
+        }
+        const pa = arr[k - 1][s];
+        if (pa < INF) {
+          const pl = lab[k - 1][s];
+          const need = pa + (pl && pl.kind !== 'access' ? cfg.buffer : 0);
+          if (!trip || need <= trip.times[i]) {
+            const t = earliestTrip(p.trips, i, need, p.sorted);
+            if (t && (!trip || t.times[i] < trip.times[i])) { trip = t; bStop = s; bIdx = i; }
+          }
+        }
+      }
+    }
+    const walked = new Set();
+    for (const s of improved) {
+      const L = lab[k][s];
+      for (const f of net.foot[s]) {
+        const w = cfg.footMin(s, f.to, f.dist);
+        const a = arr[k][s] + w;
+        if (a < arr[k][f.to] && a < best[f.to]) {
+          arr[k][f.to] = best[f.to] = a;
+          lab[k][f.to] = { kind: 'walk', from: s, to: f.to, walk: w, dist: f.dist, prev: L };
+          walked.add(f.to);
+        }
+      }
+    }
+    marked = new Set([...improved, ...walked]);
+    if (!marked.size) break;
+  }
+  const rec = (L) => {
+    if (L.kind === 'access') return [{ type: 'access', stop: L.to, walk: L.walk, dist: L.dist }];
+    if (L.kind === 'ride') return [...rec(lab[L.prevK][L.from]), { type: 'ride', pat: net.patterns[L.pat], trip: L.trip, bi: L.bi, ai: L.ai }];
+    return [...rec(L.prev), { type: 'xfer', from: L.from, to: L.to, walk: L.walk, dist: L.dist }];
+  };
+  const out = [];
+  let prevBest = INF;
+  for (let k = 1; k < arr.length; k++) {
+    let bestA = INF, bestLegs = null;
+    net.stops.forEach((s, i) => {
+      if (arr[k][i] >= INF || !lab[k][i] || lab[k][i].kind === 'access') return;
+      const d = dist(s, to);
+      if (d > cfg.maxWalk) return;
+      const w = walkMin(d, cfg.speed);
+      if (arr[k][i] + w < bestA) { bestA = arr[k][i] + w; bestLegs = [...rec(lab[k][i]), { type: 'egress', stop: i, walk: w, dist: d }]; }
+    });
+    if (bestLegs && bestA < prevBest) { out.push(bestLegs); prevBest = bestA; }
+  }
+  return out;
+}
+
+function buildJourney(legs, floor, cfg) {
+  // a transfer walk straight into the final walk becomes one walk to the destination
+  const xi = legs.length - 2;
+  if (legs[xi] && legs[xi].type === 'xfer' && legs[xi + 1].type === 'egress') {
+    const from = cfg.stops[legs[xi].from], d = dist(from, cfg.to);
+    legs = [...legs.slice(0, xi), { type: 'egress', stop: legs[xi].from, walk: walkMin(d, cfg.speed), dist: d }];
+  }
+  const firstRide = legs.find(l => l.type === 'ride');
+  const access = legs[0];
+  const margin = 2;
+  const board0 = firstRide.trip.times[firstRide.bi];
+  const start = Math.max(floor, board0 - access.walk - margin);
+  const segs = [];
+  let t = start, rideCount = 0;
+  segs.push({ type: 'walk', role: 'access', t0: t, t1: t + access.walk, stop: access.stop, dist: access.dist, src: cfg.walkSrc });
+  t += access.walk;
+  for (const l of legs.slice(1)) {
+    if (l.type === 'ride') {
+      const s = l.pat.stops[l.bi];
+      const board = l.trip.times[l.bi];
+      if (board > t) segs.push({ type: 'wait', role: rideCount ? 'transfer' : 'first', t0: t, t1: board, stop: s, src: { kind: 'calc', text: 'מחושב' } });
+      const alight = l.trip.times[l.ai];
+      const seg = { type: 'ride', t0: board, t1: alight, pat: l.pat, bi: l.bi, ai: l.ai, stop: s, toStop: l.pat.stops[l.ai], src: cfg.rideSrc };
+      if (cfg.realtime && l.pat.line.routeId) {
+        const v = cfg.realtime.vehicle({ routeId: l.pat.line.routeId, originDeparture: firstTime(l.trip) - l.pat.originOffset });
+        const e = v && estimateLive(l.pat, l.trip, l.bi, v, cfg);
+        if (e) seg.live = e;
+      }
+      segs.push(seg);
+      t = alight; rideCount++;
+    } else if (l.type === 'xfer') {
+      segs.push({ type: 'xfer', t0: t, t1: t + l.walk, stop: l.from, toStop: l.to, dist: l.dist, src: cfg.footSrc(l.from, l.to) });
+      t += l.walk;
+    } else if (l.type === 'egress') {
+      segs.push({ type: 'walk', role: 'egress', t0: t, t1: t + l.walk, stop: l.stop, dist: l.dist, src: cfg.walkSrc });
+      t += l.walk;
+    }
+  }
+  return finishJourney(segs, start, t, cfg);
+}
+
+function walkOnlyJourney(from, to, dep, cfg) {
+  const d = dist(from, to);
+  const w = walkMin(d, cfg.speed);
+  return finishJourney([{ type: 'walk', role: 'only', t0: dep, t1: dep + w, dist: d, src: cfg.walkSrc }], dep, dep + w, cfg);
+}
+
+function finishJourney(segs, start, end, cfg) {
+  const rides = segs.filter(s => s.type === 'ride');
+  const sum = types => segs.filter(s => types.includes(s.type)).reduce((a, s) => a + (s.t1 - s.t0), 0);
+  const S = cfg.stops;
+  const j = {
+    segs, start, end, total: end - start,
+    rides: rides.length, transfers: Math.max(0, rides.length - 1),
+    walk: sum(['walk', 'xfer']), wait: sum(['wait']), inVehicle: sum(['ride']), live: rides.some(s => s.live),
+    missed: rides.length > 0 && !!(rides[0].live && rides[0].live.passed),
+    sig: rides.map(s => s.pat.line.id + ':' + S[s.stop].name + '>' + S[s.toStop].name).join('|') || 'walk',
+    xferNames: segs.filter(s => s.type === 'wait' && s.role === 'transfer').map(s => S[s.stop].name)
+      .concat(segs.filter(s => s.type === 'xfer').flatMap(s => [S[s.stop].name, S[s.toStop].name]))
+  };
+  j.spread = 1 + 2 * j.transfers + (cfg.personal ? 0 : 1);
+  return j;
+}
+
+const WALK_PREFS = { less: { weight: 1.0, maxWalk: 500 }, normal: { weight: 0.3, maxWalk: 800 }, more: { weight: 0, maxWalk: 1200 } };
+const XFER_PENALTY = { 0: 0, 1: 5, 2: 12 };
+
+function makeConfig(state, provider) {
+  const speed = state.personal ? 70 : 80;
+  const stops = provider.stops();
+  let isPE = () => false;
+  if (provider.id === 'sample') {
+    const P = stops.findIndex(s => s.id === 'P'), E = stops.findIndex(s => s.id === 'E');
+    isPE = (a, b) => (a === P && b === E) || (a === E && b === P);
+  }
+  const walkSrc = state.personal ? { kind: 'personal', text: 'אישי · 14 מדידות' } : { kind: 'est', text: 'הערכה · 4.8 קמ״ש' };
+  return {
+    stops, personal: state.personal, speed, buffer: 2, maxRides: 4,
+    maxWalk: WALK_PREFS[state.walkPref].maxWalk,
+    footMin: (a, b, d) => (state.personal && isPE(a, b)) ? 6 : walkMin(d, speed),
+    footSrc: (a, b) => (state.personal && isPE(a, b)) ? { kind: 'personal', text: 'אישי · 9 מדידות' } : walkSrc,
+    walkSrc,
+    rideSrc: provider.isSample ? { kind: 'plan', text: 'לוח זמנים · דוגמה' } : { kind: 'plan', text: 'לוח זמנים · משרד התחבורה' },
+    realtime: provider.realtime || null,
+    project: provider.project || null
+  };
+}
+
+function firstTime(t) { for (const v of t.times) if (v < Infinity) return v; return Infinity; }
+
+function search(provider, state) {
+  const places = allPlaces(provider);
+  const from = places.find(p => p.key === state.from), to = places.find(p => p.key === state.to);
+  if (!from || !to) return { status: 'missing', journeys: [] };
+  if (state.from === state.to) return { status: 'same', journeys: [] };
+  const cov = provider.coverage;
+  if (cov && (state.date !== cov.date || state.time < cov.from || state.time > cov.last)) return { status: 'nocoverage', journeys: [], cov };
+  const net = buildNetwork(provider, state.date);
+  const cfg = makeConfig(state, provider);
+  const target = state.time;
+  const lo = state.mode === 'depart' ? target : target - 150, hi = state.mode === 'depart' ? target + 120 : target;
+  const hasService = net.patterns.some(p => p.trips.some(t => { const f = firstTime(t); return f >= lo - 30 && f <= hi; }));
+  if (!hasService) return { status: 'noservice', journeys: [], next: nextService(provider, state.date, target) };
+  const deps = state.mode === 'depart' ? [target, target + 8, target + 16] : range(Math.max(target - 150, cov ? cov.from : 0), target, 5);
+  const found = new Map();
+  const better = (a, b) => state.mode === 'depart' ? (a.end < b.end || (a.end === b.end && a.start > b.start)) : (a.start > b.start || (a.start === b.start && a.end < b.end));
+  const add = (j) => {
+    if (state.mode === 'arrive' && j.end > target) return;
+    const prev = found.get(j.sig);
+    if (!prev || better(j, prev)) found.set(j.sig, j);
+  };
+  for (const dep of deps) {
+    for (const maxWalk of [cfg.maxWalk, Math.min(cfg.maxWalk, 400)]) {
+      const c = { ...cfg, maxWalk, to };
+      const floor = state.mode === 'depart' ? target : -Infinity;
+      const legsList = raptor(net, from, to, dep, c);
+      legsList.forEach(legs => add(buildJourney(legs, floor, c)));
+      if (state.mode === 'depart' || dep === deps[deps.length - 1]) {
+        const top = legsList[legsList.length - 1];
+        if (top) for (const l of top.filter(x => x.type === 'ride')) {
+          const cb = { ...c, banned: new Set([l.pat.line.id]) };
+          raptor(net, from, to, dep, cb).forEach(legs => add(buildJourney(legs, floor, cb)));
+        }
+      }
+    }
+  }
+  const dWalk = dist(from, to);
+  if (walkMin(dWalk, cfg.speed) <= 35) {
+    const dep0 = state.mode === 'depart' ? target : target - walkMin(dWalk, cfg.speed);
+    const j = walkOnlyJourney(from, to, dep0, cfg);
+    found.set(j.sig, j);
+  }
+  let list = [...found.values()];
+  list = list.filter(a => !list.some(b => b !== a &&
+    b.end <= a.end && b.transfers <= a.transfers && b.walk <= a.walk && b.start >= a.start &&
+    (b.end < a.end || b.transfers < a.transfers || b.walk < a.walk || b.start > a.start)));
+  if (!list.length) return { status: 'nopath', journeys: [] };
+  const W = WALK_PREFS[state.walkPref];
+  list.forEach(j => {
+    const base = state.mode === 'depart' ? j.end - target : target - j.start;
+    j.prefHit = state.prefStop !== '' && j.xferNames.includes(state.prefStop);
+    j.score = base + W.weight * j.walk + XFER_PENALTY[state.xferPref] * j.transfers + 0.3 * j.wait - (j.prefHit ? 6 : 0);
+  });
+  list.sort((a, b) => a.score - b.score);
+  list = list.slice(0, 5);
+  tagJourneys(list, state);
+  return { status: 'ok', journeys: list };
+}
+
+function tagJourneys(list, state) {
+  const by = (f) => list.reduce((m, j) => (f(j) < f(m) ? j : m), list[0]);
+  const fastest = state.mode === 'depart' ? by(j => j.end * 100 + j.transfers) : by(j => -j.start * 100 + j.transfers);
+  const fewest = by(j => j.transfers * 10000 + j.end);
+  const leastWalk = by(j => j.walk * 10000 + j.end);
+  list.forEach(j => j.tags = []);
+  list[0].tags.push('מומלץ');
+  fastest.tags.push(state.mode === 'depart' ? 'הכי מהיר' : 'יציאה הכי מאוחרת');
+  if (fewest.transfers < fastest.transfers) fewest.tags.push('פחות החלפות');
+  if (leastWalk.walk < fastest.walk) leastWalk.tags.push('פחות הליכה');
+  list[0].why = explain(list[0], fastest, state);
+}
+
+function explain(rec, fastest, state) {
+  const parts = [];
+  if (rec === fastest) {
+    parts.push(state.mode === 'depart' ? 'זה גם המסלול המהיר ביותר' : 'זו גם היציאה המאוחרת ביותר');
+    if (rec.transfers === 0 && rec.rides) parts.push('בלי החלפות');
+  } else {
+    const late = state.mode === 'depart' ? rec.end - fastest.end : fastest.start - rec.start;
+    parts.push(state.mode === 'depart' ? `מגיע ${late} דק׳ אחרי המהיר ביותר` : `יוצא ${late} דק׳ מוקדם יותר`);
+    if (rec.transfers < fastest.transfers) parts.push(rec.transfers === 0 ? 'אבל בלי החלפות' : fastest.transfers - rec.transfers === 1 ? 'אבל עם החלפה אחת פחות' : `אבל עם ${fastest.transfers - rec.transfers} החלפות פחות`);
+    if (rec.walk < fastest.walk) parts.push(`ועם ${fastest.walk - rec.walk} דק׳ הליכה פחות`);
+  }
+  if (rec.prefHit) parts.push('ומחליף בתחנה המועדפת עליך');
+  return parts.join(', ') + '.';
+}
+
+function nextService(provider, dateStr, minute) {
+  if (provider.coverage) {
+    // real data covers one date: the next ride that starts later that day
+    let best = Infinity;
+    for (const p of provider.patterns()) for (const t of p.trips) { const f = firstTime(t); if (f > minute && f < best) best = f; }
+    return best <= provider.coverage.last ? { date: dateStr, time: best } : null;
+  }
+  const [y, m, d] = dateStr.split('-').map(Number);
+  for (let off = 0; off < 4; off++) {
+    const ds = isoDate(new Date(y, m - 1, d + off));
+    const st = provider.serviceStart(ds);
+    if (off === 0 && st <= minute) continue;
+    return { date: ds, time: st };
+  }
+  return null;
+}
+
+/* ------------------------------ helpers ------------------------------ */
+const range = (a, b, step) => { const r = []; for (let x = a; x <= b; x += step) r.push(x); return r; };
+const pad = n => String(n).padStart(2, '0');
+const isoDate = dt => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+const clock = m => { const x = ((Math.round(m) % 1440) + 1440) % 1440; return `${pad(Math.floor(x / 60))}:${pad(x % 60)}`; };
+const DAY_NAMES = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת'];
+const dayName = ds => { const [y, m, d] = ds.split('-').map(Number); return DAY_NAMES[new Date(y, m - 1, d).getDay()]; };
+const shortDate = ds => { const [y, m, d] = ds.split('-').map(Number); return `${d}.${m}`; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const placeCache = new Map();
+function allPlaces(provider) {
+  if (placeCache.has(provider.id)) return placeCache.get(provider.id);
+  const named = provider.places().map(p => ({ ...p, key: 'p:' + p.id, label: p.name }));
+  const groups = new Map();
+  provider.stops().forEach(s => { const g = groups.get(s.name) || []; g.push(s); groups.set(s.name, g); });
+  const stopPlaces = [...groups.entries()].map(([name, g]) => ({
+    key: 'n:' + name, name, label: name, sub: g.length > 1 ? `${g.length} תחנות בשם הזה` : 'תחנה',
+    x: g.reduce((a, s) => a + s.x, 0) / g.length, y: g.reduce((a, s) => a + s.y, 0) / g.length
+  })).sort((a, b) => a.name.localeCompare(b.name, 'he'));
+  const all = [...named, ...stopPlaces];
+  placeCache.set(provider.id, all);
+  return all;
+}
+
+const ICON = {
+  walk: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="M10.5 8.5 8 21h2.2l1.6-7 2.2 2.2V21h2v-6.3l-2.3-2.3.7-3.2A6 6 0 0 0 19 12v-2a4 4 0 0 1-3.3-1.8l-1-1.6A2 2 0 0 0 13 6h-.5a2 2 0 0 0-1.4.6L7 10.6V15h2v-3.6z"/></svg>',
+  wait: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
+  bus: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1v2h-2.5v-2h-7v2H6v-2a1 1 0 0 1-1-1zm2 2v5h10V6zm1.5 7.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4m7 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4"/></svg>',
+  lrt: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 1h6v2h-2v2h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2l1.5 3h-2.2l-1.5-3H10.2l-1.5 3H6.5L8 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3V3H9zM8 8v4h8V8zm1 6.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4m6 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4"/></svg>',
+  rail: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c4 0 7 .5 7 4v10a3 3 0 0 1-2 2.8l1.5 2.2h-2.3l-1.4-2H9.2l-1.4 2H5.5L7 18.8A3 3 0 0 1 5 16V6c0-3.5 3-4 7-4m-5 5v4h10V7zm2 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3"/></svg>'
+};
+ICON.taxi = ICON.bus;
+const modeVar = mode => `var(--${mode})`;
+const lineName = ln => ln.mode === 'bus' ? `קו ${ln.label}` : ln.mode === 'lrt' ? `רכבת קלה · קו ${ln.label}` : ln.mode === 'taxi' ? `מונית שירות ${ln.label}` : 'רכבת';
+
+/* -------------------------------- UI -------------------------------- */
+const PROVIDERS = { sample: new SampleProvider(SAMPLE_DATA) };
+if (TLV_DATA) PROVIDERS.tlv = new GtfsSliceProvider(TLV_DATA, TLV_DATA.patterns.some(p => p.m) ? new StrideRealtime(TLV_DATA.date) : new NoRealtime());
+const $ = id => document.getElementById(id);
+const now = new Date();
+const state = {
+  dataset: PROVIDERS.tlv ? 'tlv' : 'sample',
+  from: '', to: '', mode: 'depart', date: isoDate(now), time: now.getHours() * 60 + now.getMinutes(),
+  walkPref: 'normal', xferPref: '1', prefStop: '', personal: false, selected: 0
+};
+const DEFAULTS = {
+  sample: { from: 'p:home', to: 'p:work' },
+  tlv: { from: 'p:tau', to: 'p:carmel', time: 8 * 60 }
+};
+try {
+  const saved = JSON.parse(localStorage.getItem('transit-proto-prefs') || 'null');
+  if (saved) Object.assign(state, { walkPref: saved.walkPref || 'normal', xferPref: saved.xferPref || '1', personal: !!saved.personal });
+} catch (e) { /* storage unavailable */ }
+const savePrefs = () => { try { localStorage.setItem('transit-proto-prefs', JSON.stringify({ walkPref: state.walkPref, xferPref: state.xferPref, personal: state.personal })); } catch (e) { } };
+const P = () => PROVIDERS[state.dataset];
+
+function setDataset(id) {
+  state.dataset = id;
+  const pv = P();
+  Object.assign(state, DEFAULTS[id]);
+  if (pv.coverage) {
+    state.date = pv.coverage.date;
+    // schedule data for today: start from the current time, so live data is relevant
+    if (pv.coverage.date === israelDate(Date.now())) state.time = Math.min(israelMinutes(Date.now()), pv.coverage.last);
+  }
+  else { state.date = isoDate(now); state.time = now.getHours() * 60 + now.getMinutes(); }
+  state.prefStop = ''; state.selected = 0;
+  fillLists();
+}
+
+function fillLists() {
+  const pv = P();
+  const places = allPlaces(pv);
+  $('place-list').innerHTML = places.map(p => `<option value="${esc(p.label)}"></option>`).join('');
+  const chips = pv.places().map(p => `<button type="button" class="chip-btn" data-key="p:${p.id}">${esc(p.name)}</button>`).join('');
+  $('saved').innerHTML = chips + (pv.id === 'sample' ? `<button type="button" class="chip-btn" data-key="trip:home-work">בית ← עבודה</button><button type="button" class="chip-btn" data-key="trip:work-home">עבודה ← בית</button>` : '');
+  const names = [...new Set(pv.stops().map(s => s.name))].sort((a, b) => a.localeCompare(b, 'he'));
+  $('pref-stop').innerHTML = `<option value="">אין העדפה</option>` + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  $('personal-desc').textContent = pv.id === 'sample'
+    ? '14 נסיעות מתועדות: קצב הליכה 4.2 קמ״ש במקום 4.8, ומעבר מהרכבת לרכבת הקלה במרכז העיר שלוקח 6 דק׳ ולא 4.'
+    : 'קצב הליכה אישי של 4.2 קמ״ש במקום ברירת המחדל של 4.8. זו מדידה מדומה; בנתוני תל אביב אין עדיין נסיעות מתועדות.';
+  const cov = pv.coverage;
+  $('date').disabled = !!cov;
+  if (cov) { $('time').min = clock(cov.from); $('time').max = clock(cov.last); } else { $('time').removeAttribute('min'); $('time').removeAttribute('max'); }
+  $('badge').textContent = pv.isSample ? 'אב־טיפוס · עיר בדויה, קווים וזמנים בדויים' : `אב־טיפוס · לוחות זמנים אמיתיים ל${dayName(cov.date)} ${shortDate(cov.date)}`;
+  $('badge').classList.toggle('real', !pv.isSample);
+  $('note').innerHTML = pv.isSample
+    ? 'כל התחנות, הקווים ולוחות הזמנים בעיר הדוגמה בדויים ומשמשים להדגמת הממשק והחישוב בלבד. הם מגיעים מהספק <code>SampleProvider</code>.'
+    : cov.fullDay
+      ? `לוחות הזמנים הם ה־${esc(pv.data.source)}, לכל ${dayName(cov.date)} ${shortDate(cov.date)}, כולל נסיעות מהערב הקודם שנמשכות אחרי חצות. אוטובוסים, רכבת קלה ומוניות שירות: רק התחנות בתוך ${esc(pv.name)}, ונסיעות שיוצאות מהעיר נחתכות בגבולה. רכבת ישראל: כל התחנות בארץ. זמנים מעוגלים לדקה. ${pv.realtime instanceof StrideRealtime
+        ? `זמן אמת: מיקומי האוטובוסים והרכבות מ־Open Bus Stride של הסדנא לידע ציבורי, שאוסף את נתוני ה־SIRI של משרד התחבורה כל דקה, באיחור של כדקתיים. מהמיקום מחושב האיחור של הנסיעה, והוא מוצג ליד הזמן המתוכנן. זה שירות קהילתי ולא שירות רשמי, והוא פעיל רק כשהנתונים הם של היום${pv.realtime.active() ? '' : ' (הנתונים כאן אינם של היום, ולכן אין זמן אמת)'}.`
+        : 'אין זמן אמת, ולכן כל הזמנים הם לפי לוח הזמנים.'} מיקומי המקומות השמורים מחושבים לפי התחנות שנושאות את שמם. הספק: <code>GtfsSliceProvider</code>.`
+      : `לוחות הזמנים של ${esc(pv.name)} הם ה־GTFS של משרד התחבורה, כפי שמוגש דרך ה־API של Open Bus (הסדנה לידע ציבורי), ל${dayName(cov.date)} ${shortDate(cov.date)} בין ${clock(cov.from)} ל־${clock(cov.to)}. נכללות ${pv.stops().length.toLocaleString('he')} תחנות בתוך גבולות העיר בלבד, ונסיעות שיוצאות מהעיר נחתכות בגבולה. רכבת ישראל אינה נכללת בנתונים שנמשכו. זמנים מעוגלים לדקה, ואין זמן אמת. מיקומי המקומות השמורים מחושבים לפי התחנות שנושאות את שמם. הספק: <code>GtfsSliceProvider</code>.`;
+}
+
+function initControls() {
+  const pick = (input, field) => {
+    const v = input.value.trim();
+    const p = allPlaces(P()).find(x => x.label === v);
+    if (p) { state[field] = p.key; state.selected = 0; run(); }
+  };
+  $('from').addEventListener('change', e => pick(e.target, 'from'));
+  $('to').addEventListener('change', e => pick(e.target, 'to'));
+  $('dataset').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.dataset.v === state.dataset) return; setDataset(b.dataset.v); sync(); run(); });
+  $('swap').addEventListener('click', () => { [state.from, state.to] = [state.to, state.from]; state.selected = 0; sync(); run(); });
+  $('saved').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const k = b.dataset.key;
+    if (k === 'trip:home-work') { state.from = 'p:home'; state.to = 'p:work'; }
+    else if (k === 'trip:work-home') { state.from = 'p:work'; state.to = 'p:home'; }
+    else if (state.to === k) { state.from = k; } else { state.to = k; }
+    state.selected = 0; sync(); run();
+  });
+  $('mode-depart').addEventListener('click', () => { state.mode = 'depart'; state.selected = 0; sync(); run(); });
+  $('mode-arrive').addEventListener('click', () => { state.mode = 'arrive'; state.selected = 0; sync(); run(); });
+  $('date').addEventListener('change', e => { if (e.target.value) { state.date = e.target.value; state.selected = 0; run(); } });
+  $('time').addEventListener('change', e => { const v = e.target.value; if (v) { const [h, m] = v.split(':').map(Number); state.time = h * 60 + m; state.selected = 0; run(); } });
+  $('walk-pref').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.walkPref = b.dataset.v; state.selected = 0; savePrefs(); sync(); run(); });
+  $('xfer-pref').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.xferPref = b.dataset.v; state.selected = 0; savePrefs(); sync(); run(); });
+  $('pref-stop').addEventListener('change', e => { state.prefStop = e.target.value; state.selected = 0; sync(); run(); });
+  $('personal').addEventListener('change', e => { state.personal = e.target.checked; state.selected = 0; savePrefs(); sync(); run(); });
+  $('routes').addEventListener('click', e => {
+    const n = e.target.closest('[data-next]');
+    if (n) { const [d, t] = n.dataset.next.split('|'); state.date = d; state.time = Number(t); sync(); run(); return; }
+    const b = e.target.closest('.route'); if (b) { state.selected = Number(b.dataset.i); renderResults(); }
+  });
+}
+
+function sync() {
+  const places = allPlaces(P());
+  const lbl = k => (places.find(p => p.key === k) || {}).label || '';
+  $('from').value = lbl(state.from); $('to').value = lbl(state.to);
+  $('date').value = state.date; $('time').value = clock(state.time);
+  [...$('dataset').children].forEach(b => { b.setAttribute('aria-pressed', b.dataset.v === state.dataset); b.hidden = !PROVIDERS[b.dataset.v]; });
+  $('mode-depart').setAttribute('aria-pressed', state.mode === 'depart');
+  $('mode-arrive').setAttribute('aria-pressed', state.mode === 'arrive');
+  [...$('walk-pref').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.walkPref));
+  [...$('xfer-pref').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.v === state.xferPref));
+  $('pref-stop').value = state.prefStop;
+  $('personal').checked = state.personal;
+  const bits = [];
+  if (state.personal) bits.push('פרופיל אישי פעיל');
+  if (state.walkPref !== 'normal') bits.push(state.walkPref === 'less' ? 'מעט הליכה' : 'הליכה חופשית');
+  if (state.prefStop !== '') bits.push('תחנה מועדפת');
+  $('pref-hint').textContent = bits.join(' · ');
+}
+
+let result = null;
+function run() { result = search(P(), state); renderResults(); refreshLive(); }
+
+// fetch live positions for the lines in the results, then show the results again with them
+let liveSeq = 0;
+async function refreshLive() {
+  const pv = P(), rt = pv.realtime;
+  if (!rt || !rt.refresh || !result || !result.journeys.length) return;
+  const ids = result.journeys.flatMap(j => j.segs.filter(s => s.type === 'ride' && s.pat.line.routeId).map(s => s.pat.line.routeId));
+  const seq = ++liveSeq;
+  const before = rt.status.text;
+  let fetched = false;
+  try { fetched = await rt.refresh(ids); } catch (e) { /* the source sets its own status */ }
+  if (seq !== liveSeq || pv !== P()) return; // a newer search started meanwhile
+  if (fetched || rt.status.text !== before) {
+    const sel = state.selected;
+    result = search(pv, state);
+    state.selected = sel;
+    renderResults();
+  }
+}
+setInterval(refreshLive, 60000);
+
+function routeCard(j, i) {
+  const total = Math.max(1, j.total);
+  const bar = j.segs.map(s => {
+    const w = ((s.t1 - s.t0) / total * 100).toFixed(2);
+    const style = s.type === 'ride' ? `flex:${w} 1 0;background:${modeVar(s.pat.line.mode)}` : `flex:${w} 1 0`;
+    return `<i class="${s.type}" style="${style}"></i>`;
+  }).join('');
+  const rides = j.segs.filter(s => s.type === 'ride');
+  const lines = rides.length
+    ? rides.map(s => `<span class="line-chip" style="background:${modeVar(s.pat.line.mode)}">${ICON[s.pat.line.mode]}${esc(s.pat.line.label)}</span>`).join('<span aria-hidden="true">‹</span>')
+    : `<span class="line-chip" style="background:var(--walk)">${ICON.walk}ברגל</span>`;
+  const xf = j.rides ? (j.transfers === 0 ? 'ללא החלפות' : j.transfers === 1 ? 'החלפה אחת' : `${j.transfers} החלפות`) : '';
+  return `<button type="button" class="route" data-i="${i}" aria-pressed="${state.selected === i}">
+    <div class="row1">
+      <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+        <div class="tags">${j.tags.map(t => `<span class="tag${t === 'מומלץ' ? ' rec' : ''}">${t}</span>`).join('')}</div>
+        <div class="times">יציאה <b class="num">${clock(j.start)}</b> · הגעה <b class="num">${clock(j.end)}</b></div>
+      </div>
+      <div class="total"><span class="big">${j.total}</span><span class="unit">דק׳</span></div>
+    </div>
+    <div class="bar" aria-hidden="true">${bar}</div>
+    <div class="lines">${lines}${xf ? `<span>· ${xf}</span>` : ''}<span>· הליכה <span class="num">${j.walk}</span> דק׳</span></div>
+    ${j.why ? `<div class="why">${j.why}</div>` : ''}
+    <div class="conf">טווח משוער ±${j.spread} דק׳ · ${!j.rides ? 'הערכת הליכה' : j.missed ? 'זמן אמת: הנסיעה הראשונה כבר עברה את התחנה' : j.live ? 'לפי לוח זמנים, עם עדכון זמן אמת' : 'לפי לוח זמנים, ללא זמן אמת'}</div>
+  </button>`;
+}
+
+function renderResults() {
+  const r = result, box = $('routes');
+  $('results-meta').textContent = r.journeys.length ? `${dayName(state.date)} · ${state.mode === 'depart' ? 'יציאה' : 'הגעה עד'} ${clock(state.time)}` : '';
+  if (r.status === 'missing') { box.innerHTML = `<p class="empty">בחר מוצא ויעד מהרשימה. אפשר להקליד חלק משם התחנה.</p>`; renderSheet(null); return; }
+  if (r.status === 'same') { box.innerHTML = `<p class="empty">המוצא והיעד זהים. בחר יעד אחר.</p>`; renderSheet(null); return; }
+  if (r.status === 'nocoverage') {
+    const c = r.cov, mid = Math.min(Math.max(state.time, c.from), c.last);
+    box.innerHTML = `<div class="notice"><h3>אין נתונים ${state.date !== c.date ? 'ליום הזה' : 'לשעה הזו'}</h3>
+      <p>לוחות הזמנים האמיתיים שנמשכו מכסים רק את ${dayName(c.date)} ${shortDate(c.date)}${c.fullDay ? '' : `, בין ${clock(c.from)} ל־${clock(c.last)} לחיפוש`}.</p>
+      <button type="button" class="btn" data-next="${c.date}|${mid}">חפש ב־${clock(mid)}</button></div>`;
+    renderSheet(null); return;
+  }
+  if (r.status === 'noservice') {
+    const nx = r.next;
+    box.innerHTML = `<div class="notice"><h3>אין שירות בשעה זו</h3>
+      <p>ב${dayName(state.date)} בשעה ${clock(state.time)} לא יוצאות נסיעות ${dayType(state.date) === 'weekday' ? 'בשעות הלילה' : dayType(state.date) === 'saturday' ? 'בשבת עד צאתה' : 'אחרי כניסת השבת'} ${P().isSample ? 'בנתוני הדוגמה' : 'לפי לוח הזמנים'}.</p>
+      ${nx ? `<p>השירות הבא מתחיל ב${dayName(nx.date)} בשעה <b class="num">${clock(nx.time)}</b>.</p>
+      <button type="button" class="btn" data-next="${nx.date}|${nx.time}">חפש ליציאה ב${dayName(nx.date)} ${clock(nx.time)}</button>` : ''}</div>`;
+    renderSheet(null); return;
+  }
+  if (r.status === 'nopath') {
+    box.innerHTML = `<div class="notice"><h3>לא נמצא מסלול</h3><p>אין חיבור בתחבורה ציבורית בטווח ההליכה שנבחר. נסה לבחור "לא אכפת לי" תחת כמה ללכת ברגל.</p></div>`;
+    renderSheet(null); return;
+  }
+  if (state.selected >= r.journeys.length) state.selected = 0;
+  box.innerHTML = r.journeys.map(routeCard).join('');
+  renderSheet(r.journeys[state.selected]);
+}
+
+function stepRow(clockText, icon, color, stemCls, stemColor, title, sub, dur, src) {
+  return `<li class="step">
+    <div class="clock">${clockText}</div>
+    <div class="rail"><span class="dot" style="background:${color}">${icon}</span><span class="stem ${stemCls}" style="${stemColor ? 'background:' + stemColor : ''}"></span></div>
+    <div class="body"><div class="t">${title}</div>${sub ? `<div class="s">${sub}</div>` : ''}
+      <div class="meta"><span class="dur">${dur} דק׳</span>${[].concat(src || []).map(x => `<span class="src ${x.kind}">${x.text}</span>`).join('')}</div></div>
+  </li>`;
+}
+
+function renderSheet(j) {
+  const sheet = $('sheet'), pv = P();
+  if (!j) { sheet.innerHTML = `<h2>פירוט המסלול</h2><p class="empty">כשיימצא מסלול, הפירוט שלו יופיע כאן: הליכה, המתנה, נסיעה והחלפה, כל אחד עם מקור הזמן שלו.</p>${mapSvg(null)}`; return; }
+  const S = pv.stops();
+  const places = allPlaces(pv);
+  const fromP = places.find(p => p.key === state.from), toP = places.find(p => p.key === state.to);
+  const meters = d => `<span class="num">${Math.round(d * DETOUR / 10) * 10}</span> מ׳ בערך`;
+  const rows = j.segs.map(s => {
+    const d = s.t1 - s.t0;
+    if (s.type === 'walk') {
+      const t = s.role === 'access' ? `הליכה לתחנה ${esc(S[s.stop].name)}` : `הליכה אל ${esc(toP.name)}`;
+      return stepRow(clock(s.t0), ICON.walk, 'var(--walk)', 'walk', '', t, meters(s.dist), d, s.src);
+    }
+    if (s.type === 'wait') {
+      const t = s.role === 'transfer' ? `החלפה ב${esc(S[s.stop].name)}` : `המתנה בתחנה ${esc(S[s.stop].name)}`;
+      const sub = s.role === 'transfer' ? 'כולל 2 דק׳ מרווח לירידה ולמעבר' : 'כולל 2 דק׳ מרווח ביטחון';
+      return stepRow(clock(s.t0), ICON.wait, 'var(--wait)', 'wait', '', t, sub, d, s.src);
+    }
+    if (s.type === 'xfer') {
+      return stepRow(clock(s.t0), ICON.walk, 'var(--walk)', 'walk', '', `מעבר ברגל ל${esc(S[s.toStop].name)}`, `מ${esc(S[s.stop].name)} · ${meters(s.dist)}`, d, s.src);
+    }
+    const ln = s.pat.line, stopsN = s.ai - s.bi;
+    const late = d => d > 0 ? `איחור ${d} דק׳` : d < 0 ? `מקדים ב־${-d} דק׳` : 'בזמן';
+    const live = s.live && (s.live.passed
+      ? { kind: 'warn', text: `זמן אמת · כבר עבר את התחנה (${late(s.live.delay)}, נכון ל־${clock(s.live.at)})` }
+      : { kind: 'live', text: `זמן אמת · צפוי ${clock(s.live.expected)} (${late(s.live.delay)}, נכון ל־${clock(s.live.at)})` });
+    return stepRow(clock(s.t0), ICON[ln.mode], modeVar(ln.mode), '', modeVar(ln.mode), `${lineName(ln)} לכיוון ${esc(ln.headsign)}`,
+      `${ln.agency ? esc(ln.agency) + ' · ' : ''}${stopsN} ${stopsN === 1 ? 'תחנה' : 'תחנות'} · ירידה ב${esc(S[s.toStop].name)} ב־<span class="num">${clock(s.t1)}</span>`, d, live ? [s.src, live] : s.src);
+  }).join('');
+  const sum = j.segs.reduce((a, s) => a + (s.t1 - s.t0), 0);
+  sheet.innerHTML = `<div class="sheet-head"><h2>פירוט המסלול</h2>
+      <div class="leave">צא מ${esc(fromP.name)} ב־<b>${clock(j.start)}</b> · תגיע ב־<b>${clock(j.end)}</b></div></div>
+    <ol class="steps">${rows}
+      <li class="step"><div class="clock">${clock(j.end)}</div><div class="rail"><span class="dot" style="background:var(--ink);color:var(--surface)"><b style="font-size:11px">ל</b></span></div>
+      <div class="body"><div class="t">הגעה אל ${esc(toP.name)}</div>${toP.sub ? `<div class="s">${esc(toP.sub)}</div>` : ''}</div></li>
+    </ol>
+    <div class="sumcheck"><span class="ok">✓</span> סכום המקטעים <span class="num">${sum}</span> דק׳ = זמן כולל <span class="num">${j.total}</span> דק׳</div>
+    <div class="legend"><span class="src plan">לוח זמנים</span>זמן מתוכנן
+      <span class="src live">זמן אמת</span>${pv.realtime ? esc(pv.realtime.status.text.replace(/^זמן אמת:? ?/, '')) : 'לא זמין'}
+      <span class="src personal">אישי</span>נמדד בנסיעות שלך
+      <span class="src est">הערכה</span>ברירת מחדל, עד שיהיו מדידות
+      <span class="src calc">מחושב</span>נגזר מהשאר</div>
+    ${mapSvg(j)}`;
+}
+
+function mapSvg(j) {
+  const pv = P(), S = pv.stops();
+  const W = 640, H = 560, pad = 30;
+  const places = allPlaces(pv);
+  const fromP = places.find(p => p.key === state.from), toP = places.find(p => p.key === state.to);
+  // fit: whole network for the sample city; the journey's neighbourhood for a real city
+  let pts = S;
+  if (j && !pv.isSample) {
+    pts = [];
+    j.segs.forEach(s => { if (s.type === 'ride') s.pat.stops.slice(s.bi, s.ai + 1).forEach(i => pts.push(S[i])); });
+    if (fromP) pts.push(fromP); if (toP) pts.push(toP);
+  }
+  let x0 = Math.min(...pts.map(p => p.x)), x1 = Math.max(...pts.map(p => p.x)), y0 = Math.min(...pts.map(p => p.y)), y1 = Math.max(...pts.map(p => p.y));
+  const m = Math.max(x1 - x0, y1 - y0) * 0.08 + 150; x0 -= m; x1 += m; y0 -= m; y1 += m;
+  const sc = Math.min((W - 2 * pad) / (x1 - x0), (H - 2 * pad) / (y1 - y0));
+  const ox = (W - (x1 - x0) * sc) / 2, oy = (H - (y1 - y0) * sc) / 2;
+  const X = x => ox + (x - x0) * sc, Y = y => H - oy - (y - y0) * sc;
+  const inView = s => s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1;
+  const dim = j ? 0.28 : 0.85;
+  const lines = pv.mapLines().map(ln => `<polyline points="${ln.stops.map(i => `${X(S[i].x)},${Y(S[i].y)}`).join(' ')}" fill="none" stroke="${modeVar(ln.mode)}" stroke-width="${ln.mode === 'bus' ? 3 : 5}" stroke-linejoin="round" stroke-linecap="round" opacity="${dim}"/>`).join('');
+  let route = '';
+  const used = new Set();
+  if (j) {
+    route = j.segs.map(s => {
+      if (s.type === 'ride') {
+        s.pat.stops.slice(s.bi, s.ai + 1).forEach(i => used.add(i));
+        const p = s.pat.stops.slice(s.bi, s.ai + 1).map(i => `${X(S[i].x)},${Y(S[i].y)}`).join(' ');
+        return `<polyline points="${p}" fill="none" stroke="${modeVar(s.pat.line.mode)}" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>`;
+      }
+      if (s.type === 'walk' || s.type === 'xfer') {
+        let a, b;
+        if (s.role === 'access') { a = fromP; b = S[s.stop]; }
+        else if (s.role === 'egress') { a = S[s.stop]; b = toP; }
+        else if (s.role === 'only') { a = fromP; b = toP; }
+        else { a = S[s.stop]; b = S[s.toStop]; }
+        return `<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}" stroke="var(--ink)" stroke-width="2.5" stroke-dasharray="2 5" stroke-linecap="round"/>`;
+      }
+      return '';
+    }).join('');
+  }
+  const keyStops = new Set();
+  if (j) j.segs.forEach(s => { if (s.type === 'ride') { keyStops.add(s.pat.stops[s.bi]); keyStops.add(s.pat.stops[s.ai]); } });
+  const small = S.length < 60;
+  const stops = S.map((s, i) => {
+    if (!inView(s)) return '';
+    const on = !j || used.has(i);
+    const label = small ? true : keyStops.has(i);
+    const r = small ? (on && j ? 5.5 : 4) : (keyStops.has(i) ? 5 : used.has(i) ? 2.6 : 1.6);
+    const dot = `<circle cx="${X(s.x)}" cy="${Y(s.y)}" r="${r}" fill="${small || keyStops.has(i) ? 'var(--surface)' : 'var(--muted)'}" stroke="${small || keyStops.has(i) ? 'var(--ink)' : 'none'}" stroke-width="1.6" opacity="${small ? (on ? 1 : 0.55) : (used.has(i) ? 1 : 0.35)}"/>`;
+    const txt = label ? `<text x="${X(s.x) - 8}" y="${Y(s.y) - 8}" font-size="${keyStops.has(i) ? 13 : 11.5}" font-weight="${keyStops.has(i) ? 600 : 400}" fill="var(--ink)" text-anchor="start" direction="rtl" style="paint-order:stroke;stroke:var(--sunken);stroke-width:3px">${esc(s.name)}</text>` : '';
+    return dot + txt;
+  }).join('');
+  const pin = (p, letter, bg, fg) => p ? `<g><circle cx="${X(p.x)}" cy="${Y(p.y)}" r="11" fill="${bg}"/><text x="${X(p.x)}" y="${Y(p.y) + 4.5}" font-size="12" font-weight="700" text-anchor="middle" fill="${fg}">${letter}</text></g>` : '';
+  const cap = pv.isSample
+    ? 'מפה סכמטית של עיר הדוגמה · קווים צבעוניים: <span style="color:var(--lrt)">רכבת קלה</span>, <span style="color:var(--rail)">רכבת</span>, <span style="color:var(--bus)">אוטובוס</span> · קו מקווקו: הליכה'
+    : 'מיקומי התחנות לפי נתוני משרד התחבורה · הקו המודגש עובר בין התחנות בקו ישר, לא לפי מסלול הנסיעה ברחובות · קו מקווקו: הליכה';
+  return `<div class="map-wrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="מפה של ${esc(pv.name)}${j ? ' עם המסלול הנבחר' : ''}">
+    ${lines}${route}${stops}${pin(fromP, 'מ', 'var(--accent)', 'var(--accent-ink)')}${pin(toP, 'ל', 'var(--ink)', 'var(--surface)')}
+  </svg></div><div class="map-cap">${cap}</div>`;
+}
+
+initControls();
+setDataset(state.dataset);
+sync();
+run();
+</script>

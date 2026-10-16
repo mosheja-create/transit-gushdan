@@ -30,6 +30,7 @@ from zoneinfo import ZoneInfo
 GTFS_URL = "https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip"
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "data" / "cache" / "israel-public-transportation.zip"
+STATIONS = ROOT / "data" / "stations.json"  # underground stations and fixed transfers that the GTFS does not carry
 
 RAIL = "2"
 KEEP_TYPES = {"0", "2", "3", "8"}  # light rail, rail, bus, shared taxi; skips cable car and on-demand lines
@@ -255,6 +256,24 @@ def build_day(day, ctx, out):
             name = "רכבת " + name
         out_stops.append([code, name, round(float(r["stop_lat"]), 5), round(float(r["stop_lon"]), 5)])
 
+    # minutes between street and platform (5th field) and fixed transfer times, from data/stations.json
+    out_transfers = []
+    if STATIONS.exists():
+        st = json.loads(STATIONS.read_text(encoding="utf-8"))
+        by_code = defaultdict(list)
+        for i, row in enumerate(out_stops):
+            by_code[row[0]].append(i)
+        ug = st.get("underground", {})
+        for code in ug.get("stops", {}):
+            for i in by_code.get(int(code), []):
+                out_stops[i].append(ug["minutes"])
+        for t in st.get("transfers", []):
+            for a in by_code.get(t["from"], []):
+                for b in by_code.get(t["to"], []):
+                    out_transfers.append([a, b, t["minutes"]])
+                    if t.get("both_ways"):
+                        out_transfers.append([b, a, t["minutes"]])
+
     out_routes = []
     for rid in route_list:
         r = routes[rid]
@@ -284,6 +303,7 @@ def build_day(day, ctx, out):
         "stops": out_stops,
         "routes": out_routes,
         "patterns": out_patterns,
+        "transfers": out_transfers,
     }
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

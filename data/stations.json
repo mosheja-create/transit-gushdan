@@ -1,0 +1,28 @@
+{
+  "_about": "Station knowledge the GTFS does not carry. Read by scripts/build_gtfs_data.py; stops are matched by stop_code. Minutes are estimates to be checked on site (planning/CHECKLIST.md).",
+  "underground": {
+    "minutes": 5,
+    "note": "Red Line stations in the tunnel: time between the street and the platform, added to every walk to or from the station (decided 16.10.2026).",
+    "stops": {
+      "20701": "אליפלט",
+      "20703": "אלנבי",
+      "20705": "קרליבך",
+      "20707": "יהודית",
+      "20709": "שאול המלך",
+      "20711": "ארלוזורוב",
+      "20713": "אבא הלל",
+      "20715": "ביאליק",
+      "20717": "בן גוריון",
+      "20719": "אהרונוביץ'"
+    }
+  },
+  "transfers": [
+    {
+      "from": 20711,
+      "to": 17038,
+      "minutes": 12,
+      "both_ways": true,
+      "note": "Red Line Arlozorov to Israel Railways Tel Aviv Savidor: 5 minutes up from the tunnel, about 5 minutes on the street (290 m), 2 minutes through the station entrance and security. Replaces the generic walk."
+    }
+  ]
+}

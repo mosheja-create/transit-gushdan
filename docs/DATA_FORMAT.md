@@ -22,7 +22,9 @@ python3 scripts/build_gtfs_data.py --date 2026-10-18
 
 ## מבנה ה־JSON
 - `date`, `city`, `window` (`"00:00-24:00"` לקובץ של יום שלם), `source`, `feed` (כתובת, מועד פרסום, טווח הלוח).
-- `stops`: `[stop_code, name, lat, lon]`.
+- `stops`: `[stop_code, name, lat, lon]`, ולפעמים שדה חמישי: כמה דקות לוקח לעבור בין הרחוב לרציף בתחנה תת־קרקעית.
+- `transfers`: `[[from, to, minutes], ...]`, מספרי תחנות ב־`stops`. זמן מעבר קבוע בין שתי תחנות, שבא במקום ההליכה הרגילה.
+- התחנות התת־קרקעיות והמעברים הקבועים מוגדרים ב־`data/stations.json` לפי `stop_code`, כי ה־GTFS לא כולל את המידע הזה.
 - `routes`: `[short_name, route_type, agency, headsign, route_id]`. השדה `route_id` נשמר כדי שאפשר יהיה להתאים אליו נתוני זמן אמת (SIRI `LineRef`).
 - `patterns`: קבוצה של נסיעות עם אותו קו, אותן תחנות ואותם זמני נסיעה בין התחנות:
   - `r`: מספר הקו ב־`routes`.

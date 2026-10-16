@@ -11,7 +11,8 @@
    result = { status: 'ok' | 'same' | 'outside' | 'nocoverage' | 'noservice' | 'nopath', journeys: [Journey], ... }
    Journey = { start, end, total, walk, wait, inVehicle, transfers, rides, tags, why, confidence, live, missed, legs }
    Leg    = { type: 'walk' | 'wait' | 'ride' | 'transfer', role, t0, t1, from: Stop|Place, to: Stop|Place,
-              distance (metres, walking legs), line (rides), stops (rides: [{ name, lat, lon, t }]),
+              distance (metres, walking legs), station (minutes of it spent getting to or from an underground
+              platform), fixed (a set transfer time), line (rides), stops (rides: [{ name, lat, lon, t }]),
               source: { kind, text }, live }
    Times are minutes after midnight of the service date (they can pass 1440 after midnight). */
 
@@ -32,7 +33,10 @@ export class Timetable {
     const lon0 = data.stops.reduce((s, x) => s + x[3], 0) / data.stops.length;
     const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
     this.project = (lat, lon) => ({ x: (lon - lon0) * kx, y: (lat - lat0) * ky });
-    this.stops = data.stops.map(s => ({ code: s[0], name: s[1].replace(/''/g, '״'), lat: s[2], lon: s[3], x: (s[3] - lon0) * kx, y: (s[2] - lat0) * ky }));
+    // access: minutes between the street and the platform (underground stations, data/stations.json)
+    this.stops = data.stops.map(s => ({ code: s[0], name: s[1].replace(/''/g, '״'), lat: s[2], lon: s[3], access: s[4] || 0, x: (s[3] - lon0) * kx, y: (s[2] - lat0) * ky }));
+    // fixed transfer times between two stops, replacing the generic walk (data/stations.json)
+    this.transfers = (data.transfers || []).map(([from, to, minutes]) => ({ from, to, minutes }));
     const lines = data.routes.map((r, i) => ({ id: 'r' + i, label: r[0], mode: MODES[r[1]] || 'bus', agency: r[2], headsign: r[3].replace(/''/g, '״'), routeId: r[4] || null }));
     this.patterns = data.patterns.map((p, pi) => {
       const stops = p.s.split('.').map(B36);
@@ -84,12 +88,21 @@ class Grid {
 
 /* ------------------------------ network ------------------------------ */
 const FOOTPATH_MAX = 400;
+const WALK_SPEED = 80; // metres per minute, 4.8 km/h
 function buildNetwork(tt) {
   if (tt._net) return tt._net;
   const n = tt.stops.length;
   const stopPats = Array.from({ length: n }, () => []);
   tt.patterns.forEach((p, pi) => p.stops.forEach((s, pos) => stopPats[s].push([pi, pos])));
-  const foot = tt.stops.map((s, i) => tt.stopsNear(s, FOOTPATH_MAX).filter(x => x.i !== i).map(x => ({ to: x.i, dist: x.d })));
+  // walking between nearby stops: street walk plus getting out of and into underground stations
+  const foot = tt.stops.map((s, i) => tt.stopsNear(s, FOOTPATH_MAX).filter(x => x.i !== i)
+    .map(x => ({ to: x.i, dist: x.d, walk: walkMin(x.d, WALK_SPEED) + s.access + tt.stops[x.i].access })));
+  for (const t of tt.transfers) {
+    const f = foot[t.from].find(x => x.to === t.to);
+    const fixed = { walk: t.minutes, fixed: true };
+    if (f) Object.assign(f, fixed);
+    else foot[t.from].push({ to: t.to, dist: Math.hypot(tt.stops[t.from].x - tt.stops[t.to].x, tt.stops[t.from].y - tt.stops[t.to].y), ...fixed });
+  }
   tt._net = { stops: tt.stops, patterns: tt.patterns, stopPats, foot };
   return tt._net;
 }
@@ -117,7 +130,7 @@ function raptor(net, cfg, dep) {
   let marked = new Set();
   for (const a of cfg.access) {
     if (a.d > cfg.maxWalk) continue;
-    const w = walkMin(a.d, cfg.speed);
+    const w = walkMin(a.d, cfg.speed) + net.stops[a.i].access;
     arr[0][a.i] = best[a.i] = dep + w;
     lab[0][a.i] = { kind: 'access', to: a.i, walk: w, dist: a.d };
     marked.add(a.i);
@@ -157,10 +170,10 @@ function raptor(net, cfg, dep) {
     for (const s of improved) {
       const L = lab[k][s];
       for (const f of net.foot[s]) {
-        const a = arr[k][s] + walkMin(f.dist, cfg.speed);
+        const a = arr[k][s] + f.walk;
         if (a < arr[k][f.to] && a < best[f.to]) {
           arr[k][f.to] = best[f.to] = a;
-          lab[k][f.to] = { kind: 'walk', from: s, to: f.to, walk: walkMin(f.dist, cfg.speed), dist: f.dist, prev: L };
+          lab[k][f.to] = { kind: 'walk', from: s, to: f.to, walk: f.walk, dist: f.dist, fixed: !!f.fixed, prev: L };
           walked.add(f.to);
         }
       }
@@ -171,7 +184,7 @@ function raptor(net, cfg, dep) {
   const rec = L => {
     if (L.kind === 'access') return [{ type: 'access', stop: L.to, walk: L.walk, dist: L.dist }];
     if (L.kind === 'ride') return [...rec(lab[L.prevK][L.from]), { type: 'ride', pat: net.patterns[L.pat], trip: L.trip, bi: L.bi, ai: L.ai }];
-    return [...rec(L.prev), { type: 'xfer', from: L.from, to: L.to, walk: L.walk, dist: L.dist }];
+    return [...rec(L.prev), { type: 'xfer', from: L.from, to: L.to, walk: L.walk, dist: L.dist, fixed: L.fixed }];
   };
   const out = [];
   let prevBest = INF;
@@ -181,7 +194,7 @@ function raptor(net, cfg, dep) {
       if (e.d > cfg.maxWalk) continue;
       const i = e.i;
       if (arr[k][i] >= INF || !lab[k][i] || lab[k][i].kind === 'access') continue;
-      const w = walkMin(e.d, cfg.speed);
+      const w = walkMin(e.d, cfg.speed) + net.stops[i].access;
       if (arr[k][i] + w < bestA) { bestA = arr[k][i] + w; bestLegs = [...rec(lab[k][i]), { type: 'egress', stop: i, walk: w, dist: e.d }]; }
     }
     if (bestLegs && bestA < prevBest) { out.push(bestLegs); prevBest = bestA; }
@@ -193,7 +206,8 @@ function raptor(net, cfg, dep) {
 const SRC = {
   walk: { kind: 'est', text: 'הערכה · 4.8 קמ״ש בקו ישר' },
   calc: { kind: 'calc', text: 'מחושב' },
-  plan: { kind: 'plan', text: 'לוח זמנים · משרד התחבורה' }
+  plan: { kind: 'plan', text: 'לוח זמנים · משרד התחבורה' },
+  fixed: { kind: 'est', text: 'זמן מעבר קבוע · אומדן' }
 };
 
 function buildJourney(legs, floor, cfg) {
@@ -202,7 +216,7 @@ function buildJourney(legs, floor, cfg) {
   const xi = legs.length - 2;
   if (legs[xi] && legs[xi].type === 'xfer' && legs[xi + 1].type === 'egress') {
     const d = Math.hypot(S[legs[xi].from].x - cfg.to.x, S[legs[xi].from].y - cfg.to.y);
-    legs = [...legs.slice(0, xi), { type: 'egress', stop: legs[xi].from, walk: walkMin(d, cfg.speed), dist: d }];
+    legs = [...legs.slice(0, xi), { type: 'egress', stop: legs[xi].from, walk: walkMin(d, cfg.speed) + S[legs[xi].from].access, dist: d }];
   }
   const firstRide = legs.find(l => l.type === 'ride');
   const access = legs[0];
@@ -210,7 +224,7 @@ function buildJourney(legs, floor, cfg) {
   const start = Math.max(floor, firstRide.trip.times[firstRide.bi] - access.walk - margin);
   const out = [];
   let t = start, rides = 0;
-  out.push({ type: 'walk', role: 'access', t0: t, t1: t + access.walk, from: cfg.from, to: S[access.stop], distance: access.dist * DETOUR, source: SRC.walk });
+  out.push({ type: 'walk', role: 'access', t0: t, t1: t + access.walk, from: cfg.from, to: S[access.stop], distance: access.dist * DETOUR, station: S[access.stop].access, source: SRC.walk });
   t += access.walk;
   for (const l of legs.slice(1)) {
     if (l.type === 'ride') {
@@ -230,10 +244,11 @@ function buildJourney(legs, floor, cfg) {
       out.push(leg);
       t = alight; rides++;
     } else if (l.type === 'xfer') {
-      out.push({ type: 'transfer', t0: t, t1: t + l.walk, from: S[l.from], to: S[l.to], distance: l.dist * DETOUR, source: SRC.walk });
+      out.push({ type: 'transfer', t0: t, t1: t + l.walk, from: S[l.from], to: S[l.to], distance: l.dist * DETOUR,
+        station: l.fixed ? 0 : S[l.from].access + S[l.to].access, fixed: !!l.fixed, source: l.fixed ? SRC.fixed : SRC.walk });
       t += l.walk;
     } else if (l.type === 'egress') {
-      out.push({ type: 'walk', role: 'egress', t0: t, t1: t + l.walk, from: S[l.stop], to: cfg.toPlace, distance: l.dist * DETOUR, source: SRC.walk });
+      out.push({ type: 'walk', role: 'egress', t0: t, t1: t + l.walk, from: S[l.stop], to: cfg.toPlace, distance: l.dist * DETOUR, station: S[l.stop].access, source: SRC.walk });
       t += l.walk;
     }
   }
@@ -337,7 +352,7 @@ function planTrip(tt, q, realtime) {
   if (q.date !== cov.date || q.time < cov.from || q.time > cov.last) return { status: 'nocoverage', journeys: [], coverage: cov };
   const net = buildNetwork(tt);
   const access = tt.stopsNear(from, WALK_PREFS.more.maxWalk), egress = tt.stopsNear(to, WALK_PREFS.more.maxWalk);
-  const speed = 80; // metres per minute, 4.8 km/h
+  const speed = WALK_SPEED;
   const dWalk = Math.hypot(from.x - to.x, from.y - to.y);
   const walkable = walkMin(dWalk, speed) <= 35;
   if ((!access.length || !egress.length) && !walkable) return { status: 'outside', journeys: [], which: !access.length ? 'from' : 'to' };
@@ -391,9 +406,23 @@ function planTrip(tt, q, realtime) {
     j.score = base + W.weight * j.walk + (XFER_PENALTY[prefs.transfers] ?? 5) * j.transfers + 0.3 * j.wait - (j.prefHit ? 6 : 0);
   });
   list.sort((a, b) => a.score - b.score);
-  list = list.slice(0, 5);
+  list = pickVaried(list, 5);
   tag(list, depart);
   return { status: 'ok', journeys: list };
+}
+
+/* The best `n` by score, but each mix of modes (bus only, light rail + rail, ...) gets a place first,
+   so a reasonable light rail option is not hidden behind five similar bus options. */
+function pickVaried(sorted, n) {
+  const modes = j => [...new Set(j.legs.filter(l => l.type === 'ride').map(l => l.line.mode))].sort().join('+') || 'walk';
+  const best = sorted[0].score, picked = new Set(), seen = new Set();
+  for (const j of sorted) {
+    if (picked.size >= n) break;
+    const m = modes(j);
+    if (!seen.has(m) && j.score <= best + 30) { seen.add(m); picked.add(j); }
+  }
+  for (const j of sorted) { if (picked.size >= n) break; picked.add(j); }
+  return sorted.filter(j => picked.has(j));
 }
 
 function tag(list, depart) {

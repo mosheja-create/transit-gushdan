@@ -79,6 +79,18 @@ check(other.status === 'nocoverage', 'other date reported');
 const same = await show({ ...base, from: P.tau, to: P.tau }, 'Same place');
 check(same.status === 'same', 'same place reported');
 
+// underground stations and fixed transfers (data/stations.json)
+{
+  const arl = tt.stops.findIndex(s => s.code === 20711), sav = tt.stops.findIndex(s => s.code === 17038);
+  check(arl >= 0 && tt.stops[arl].access === 5, 'Arlozorov is underground: 5 minutes to the platform');
+  check(tt.transfers.some(t => t.from === arl && t.to === sav && t.minutes === 12), 'fixed transfer Arlozorov -> Savidor');
+  const r = await engine.planTrip({ ...base, from: { name: 'ליד אלנבי', lat: tt.stops.find(s => s.code === 20703).lat, lon: tt.stops.find(s => s.code === 20703).lon }, to: P.tau });
+  const legs = r.journeys.flatMap(j => j.legs);
+  check(legs.filter(l => (l.type === 'walk' && l.role === 'access' && l.to.access) || (l.type === 'walk' && l.role === 'egress' && l.from.access))
+    .every(l => l.station === 5 && l.t1 - l.t0 >= 6), 'walks to or from an underground platform include the 5 minutes');
+  check(legs.filter(l => l.type === 'transfer' && !l.fixed).every(l => l.station === l.from.access + l.to.access), 'transfers count both stations');
+}
+
 // real time through the engine: a vehicle 3 minutes late at its first stop
 {
   const fake = { status: { kind: 'test' }, vehicle: q => ({ dist: 0, at: q.originDeparture + 3 }) };

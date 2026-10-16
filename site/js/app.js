@@ -322,14 +322,19 @@ function renderSheet(j) {
   const rows = j.legs.map(l => {
     const d = l.t1 - l.t0;
     if (l.type === 'walk') {
-      const t = l.role === 'access' ? `הליכה לתחנה ${esc(l.to.name)}` : l.role === 'only' ? `הליכה אל ${esc(state.to.name)}` : `הליכה אל ${esc(state.to.name)}`;
-      return stepRow(clock(l.t0), ICON.walk, 'var(--walk)', 'walk', '', t, meters(l.distance), d, l.source);
+      const t = l.role === 'access' ? `הליכה לתחנה ${esc(l.to.name)}` : `הליכה אל ${esc(state.to.name)}`;
+      const station = l.station ? ` · כולל ${l.station} דק׳ ${l.role === 'access' ? 'ירידה לרציף התת־קרקעי' : 'עלייה מהרציף התת־קרקעי לרחוב'}` : '';
+      return stepRow(clock(l.t0), ICON.walk, 'var(--walk)', 'walk', '', t, meters(l.distance) + station, d, l.source);
     }
     if (l.type === 'wait') {
       const t = l.role === 'transfer' ? `החלפה ב${esc(l.from.name)}` : `המתנה בתחנה ${esc(l.from.name)}`;
       return stepRow(clock(l.t0), ICON.wait, 'var(--wait)', 'wait', '', t, l.role === 'transfer' ? 'כולל 2 דק׳ מרווח לירידה ולמעבר' : 'כולל 2 דק׳ מרווח ביטחון', d, l.source);
     }
-    if (l.type === 'transfer') return stepRow(clock(l.t0), ICON.walk, 'var(--walk)', 'walk', '', `מעבר ברגל ל${esc(l.to.name)}`, `מ${esc(l.from.name)} · ${meters(l.distance)}`, d, l.source);
+    if (l.type === 'transfer') {
+      const how = l.fixed ? 'זמן מעבר קבוע לתחנה הזו: יציאה מהרציף, הליכה ברחוב וכניסה לתחנה'
+        : `${meters(l.distance)}${l.station ? ` · כולל ${l.station} דק׳ בין הרחוב לרציף התת־קרקעי` : ''}`;
+      return stepRow(clock(l.t0), ICON.walk, 'var(--walk)', 'walk', '', `מעבר ברגל ל${esc(l.to.name)}`, `מ${esc(l.from.name)} · ${how}`, d, l.source);
+    }
     const ln = l.line, n = l.stops.length - 1;
     const live = l.live && (l.live.passed
       ? { kind: 'warn', text: `זמן אמת · כבר עבר את התחנה (${late(l.live.delay)}, נכון ל־${clock(l.live.at)})` }

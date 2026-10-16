@@ -8,6 +8,7 @@ import { createMap } from './map.js';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const DAY_NAMES = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת'];
+const SHORT_DAYS = ['יום א׳', 'יום ב׳', 'יום ג׳', 'יום ד׳', 'יום ה׳', 'יום ו׳', 'שבת'];
 const dayName = ds => { const [y, m, d] = ds.split('-').map(Number); return DAY_NAMES[new Date(y, m - 1, d).getDay()]; };
 const shortDate = ds => { const [, m, d] = ds.split('-').map(Number); return `${d}.${m}`; };
 
@@ -186,7 +187,10 @@ function setNow(andRun) {
 }
 
 function syncControls() {
-  $('date').innerHTML = manifest.days.map(d => `<option value="${d.date}">${d.date === israelDate(Date.now()) ? 'היום' : dayName(d.date)} · ${shortDate(d.date)}</option>`).join('');
+  // short labels: the select is narrow next to the time field
+  const today = israelDate(Date.now()), tomorrow = israelDate(Date.now() + 86400000);
+  const label = d => d === today ? 'היום' : d === tomorrow ? 'מחר' : SHORT_DAYS[new Date(d + 'T12:00').getDay()];
+  $('date').innerHTML = manifest.days.map(d => `<option value="${d.date}">${label(d.date)} ${shortDate(d.date)}</option>`).join('');
   $('date').value = state.date;
   $('time').value = clock(state.time);
   $('mode-depart').setAttribute('aria-pressed', state.mode === 'depart');

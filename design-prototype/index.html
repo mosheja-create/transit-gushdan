@@ -1,0 +1,689 @@
+<title>Adaptive Mobility</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&family=Rubik:wght@500;600;700&display=swap">
+<style>
+/* Layout: one app column (home → options → trip → preferences) with a bottom nav on phones; on wide screens the
+   app column sits beside a "stage" that always shows the selected trip as a live, time-proportional line. */
+:root {
+  --bg: #08111f; --surface: #0e1a2e; --raised: #13243f; --line: #213656; --fg: #e8eef7; --muted: #8ea2bf;
+  --brand: #1d3f73; --accent: #35d6c6; --accent-ink: #032420; --accent-soft: rgba(53, 214, 198, .14);
+  --bus: #7cb1ff; --rail: #c3a3ff; --lrt: #ff7b8c; --walk: #8ea2bf; --wait: #f2c14e; --warn: #ffb454; --risk: #ff7070; --ok: #5fdc9a;
+  --font-display: "Rubik", "Assistant", "Arial Hebrew", sans-serif;
+  --font-body: "Assistant", "Rubik", "Arial Hebrew", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --radius: 14px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eef3f9; --surface: #ffffff; --raised: #f4f7fc; --line: #d5dfec; --fg: #0b1a30; --muted: #546a88;
+    --brand: #12305c; --accent: #088f84; --accent-ink: #ffffff; --accent-soft: rgba(8, 143, 132, .12);
+    --bus: #1f6fd6; --rail: #7a4fd0; --lrt: #d33a4f; --walk: #6a7f9c; --wait: #b98400; --warn: #b36b00; --risk: #c93434; --ok: #1d8f57;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #eef3f9; --surface: #ffffff; --raised: #f4f7fc; --line: #d5dfec; --fg: #0b1a30; --muted: #546a88;
+  --brand: #12305c; --accent: #088f84; --accent-ink: #ffffff; --accent-soft: rgba(8, 143, 132, .12);
+  --bus: #1f6fd6; --rail: #7a4fd0; --lrt: #d33a4f; --walk: #6a7f9c; --wait: #b98400; --warn: #b36b00; --risk: #c93434; --ok: #1d8f57;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.shell { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 14px 96px; display: grid; gap: 20px; grid-template-columns: 1fr; }
+@media (min-width: 980px) { .shell { grid-template-columns: minmax(380px, 460px) 1fr; padding-block: 20px 40px; align-items: start; } }
+
+/* header + demo notice */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.logo { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; letter-spacing: -0.01em; }
+.logo-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--brand); display: grid; place-items: center; }
+.logo-mark svg { width: 20px; height: 20px; }
+.demo-pill { font-size: .78rem; font-weight: 600; color: var(--warn); border: 1px solid currentColor; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.clock-pill { font-size: .8rem; color: var(--muted); }
+
+/* app column */
+.app { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.view { display: flex; flex-direction: column; gap: 14px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; margin: 0; text-wrap: balance; }
+.eyebrow { font-size: .74rem; font-weight: 700; letter-spacing: .06em; color: var(--muted); }
+.hint { font-size: .86rem; color: var(--muted); margin: 0; }
+
+/* intent */
+.intent textarea { width: 100%; min-height: 84px; resize: vertical; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; line-height: 1.45; }
+.examples { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 12px; font-size: .86rem; color: var(--fg); text-align: start; }
+.chip:hover { border-color: var(--accent); }
+.understood { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cond { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); color: var(--fg); border-radius: 8px; padding: 4px 6px 4px 10px; font-size: .86rem; }
+.cond b { font-weight: 600; }
+.cond button { border: 0; background: transparent; color: var(--muted); padding: 0 4px; font-size: 1rem; line-height: 1; }
+.unparsed { font-size: .84rem; color: var(--warn); }
+
+/* origin / destination */
+.od { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.od-rows { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.od-row { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: center; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.od-row .dot { width: 12px; height: 12px; border-radius: 50%; border: 3px solid var(--accent); justify-self: center; }
+.od-row .dot.to { border-color: var(--fg); background: var(--fg); }
+.od-row select { appearance: none; border: 0; background: transparent; width: 100%; font-weight: 600; min-width: 0; }
+.od-row select option { background: var(--surface); color: var(--fg); }
+.swap { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--raised); display: grid; place-items: center; }
+.saved { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.saved .chip { white-space: nowrap; }
+.go { border: 0; border-radius: 12px; padding: 14px; background: var(--accent); color: var(--accent-ink); font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; display: flex; justify-content: center; align-items: center; gap: 8px; }
+.go:hover { filter: brightness(1.06); }
+
+/* balance sliders */
+.balance { display: grid; gap: 12px; }
+.slider { display: grid; grid-template-columns: 84px 1fr 34px; gap: 10px; align-items: center; }
+.slider label { font-weight: 600; font-size: .92rem; }
+.slider output { font-size: .8rem; color: var(--muted); text-align: end; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+.ghost { border: 1px solid var(--line); background: transparent; border-radius: 10px; padding: 7px 12px; font-size: .88rem; }
+.ghost:hover { border-color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; border-radius: 7px; padding: 5px 10px; font-size: .86rem; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--raised); color: var(--fg); font-weight: 600; }
+
+/* option cards */
+.cards { display: flex; flex-direction: column; gap: 10px; }
+.card { text-align: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.card[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.card-name { font-family: var(--font-display); font-weight: 600; font-size: 1rem; }
+.badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.badge { font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 1px 8px; background: var(--raised); color: var(--muted); }
+.badge.rec { background: var(--accent); color: var(--accent-ink); }
+.badge.late { background: transparent; color: var(--risk); border: 1px solid currentColor; }
+.big { font-family: var(--font-num); font-weight: 600; font-size: 1.6rem; line-height: 1; }
+.big small { font-family: var(--font-body); font-size: .8rem; color: var(--muted); font-weight: 400; margin-inline-start: 3px; }
+.times { font-size: .88rem; color: var(--muted); }
+.times b { color: var(--fg); }
+.strip { display: flex; height: 12px; gap: 2px; border-radius: 6px; overflow: hidden; }
+.strip i { display: block; min-width: 4px; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .86rem; color: var(--muted); }
+.facts b { color: var(--fg); font-weight: 600; }
+.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.meter { display: grid; gap: 3px; font-size: .8rem; color: var(--muted); }
+.meter .bar { height: 6px; border-radius: 3px; background: var(--raised); overflow: hidden; }
+.meter .bar span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.meter b { color: var(--fg); font-weight: 600; }
+.why { font-size: .88rem; background: var(--accent-soft); border-radius: 8px; padding: 7px 10px; }
+.cost { font-size: .84rem; color: var(--muted); }
+
+/* stage: live line */
+.stage { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+@media (min-width: 980px) { .stage { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); } }
+.stage-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+.stage-head .eta { font-size: .95rem; color: var(--muted); }
+.stage-head .eta b { font-family: var(--font-num); color: var(--fg); font-size: 1.15rem; }
+.journey { display: grid; grid-template-columns: 54px 34px 1fr; position: relative; }
+.j-row { display: contents; }
+.j-time { font-family: var(--font-num); font-size: .84rem; color: var(--muted); padding-top: 2px; }
+.j-track { position: relative; display: flex; justify-content: center; }
+.j-seg { width: 6px; border-radius: 3px; }
+.j-seg.walk { width: 4px; background: repeating-linear-gradient(180deg, var(--walk) 0 5px, transparent 5px 10px) !important; }
+.j-seg.wait { width: 4px; background: repeating-linear-gradient(180deg, var(--wait) 0 2px, transparent 2px 5px) !important; }
+.j-node { position: absolute; top: -2px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); border: 3px solid var(--fg); }
+.j-node.xfer { width: 22px; height: 22px; top: -4px; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.j-body { padding: 0 0 0 4px; min-width: 0; }
+.j-title { font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.j-sub { font-size: .84rem; color: var(--muted); }
+.line-tag { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; font-weight: 700; border-radius: 6px; padding: 1px 7px; color: var(--bg); }
+.line-tag svg { width: 13px; height: 13px; }
+.src { font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 0 7px; border: 1px solid var(--line); color: var(--muted); }
+.progress-dot { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px var(--accent-soft); inset-inline-start: calc(54px + 9px); transform: translateY(-50%); transition: top .35s ease; z-index: 2; }
+@media (prefers-reduced-motion: reduce) { .progress-dot { transition: none; } }
+.j-draw { animation: draw .7s ease both; transform-origin: top; }
+@keyframes draw { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .j-draw { animation: none; } }
+
+/* trip mode */
+.phase { border-radius: var(--radius); padding: 18px; background: var(--brand); color: #ffffff; display: flex; flex-direction: column; gap: 8px; }
+.phase .eyebrow { color: rgba(255, 255, 255, .72); }
+.phase-main { font-family: var(--font-display); font-weight: 600; font-size: 1.45rem; line-height: 1.25; text-wrap: balance; }
+.phase-sub { color: rgba(255, 255, 255, .82); }
+.phase.risk { background: color-mix(in srgb, var(--risk) 30%, var(--brand)); }
+.countdown { font-family: var(--font-num); font-size: 2.2rem; font-weight: 600; line-height: 1; }
+.alt { background: rgba(255, 255, 255, .12); border-radius: 10px; padding: 10px 12px; font-size: .92rem; }
+.sim { display: grid; gap: 10px; }
+.sim-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sim-row input[type="range"] { flex: 1; min-width: 160px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; }
+.toggle input { width: 18px; height: 18px; accent-color: var(--risk); }
+
+/* preferences */
+.pref-list { display: grid; gap: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.learn { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: .9rem; }
+.learn dt { color: var(--muted); }
+.learn dd { margin: 0; font-weight: 600; }
+
+/* bottom nav on phones, top tabs on wide screens */
+.nav { position: fixed; inset-inline: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); z-index: 10; }
+.nav button { border: 0; background: transparent; display: grid; justify-items: center; gap: 2px; font-size: .74rem; color: var(--muted); padding: 6px 0; border-radius: 10px; }
+.nav button svg { width: 22px; height: 22px; }
+.nav button[aria-current="page"] { color: var(--accent); }
+@media (min-width: 980px) {
+  .nav { position: static; border: 1px solid var(--line); border-radius: var(--radius); padding: 4px; }
+  .nav button { grid-auto-flow: column; justify-content: center; gap: 6px; font-size: .88rem; padding: 8px 0; }
+  .nav button svg { width: 18px; height: 18px; }
+  .nav button[aria-current="page"] { background: var(--raised); }
+}
+.foot { font-size: .8rem; color: var(--muted); max-width: 70ch; }
+.toast { position: fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); inset-inline: 16px; margin: 0 auto; max-width: 420px; background: var(--fg); color: var(--bg); border-radius: 10px; padding: 10px 14px; font-size: .92rem; z-index: 20; text-align: center; }
+@media (prefers-reduced-motion: no-preference) { .card { transition: border-color .2s, box-shadow .2s; } }
+</style>
+
+<div class="shell" dir="rtl" lang="he">
+  <div class="app">
+    <header class="top">
+      <div class="logo"><span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#35d6c6" stroke-width="2.4" stroke-linecap="round"><path d="M5 19c3-9 11-5 14-14"/><circle cx="5" cy="19" r="2" fill="#35d6c6"/><circle cx="19" cy="5" r="2" fill="#35d6c6"/></svg></span>מסלול</div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="clock-pill">שעת הדגמה <b class="num" id="now-label">07:20</b></span><span class="demo-pill">נתוני הדגמה</span></div>
+    </header>
+
+    <nav class="nav" aria-label="מסכים">
+      <button type="button" data-view="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>לאן?</button>
+      <button type="button" data-view="options"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h6"/></svg>חלופות</button>
+      <button type="button" data-view="trip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 20c2-8 10-6 12-16"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="4" r="2"/></svg>נסיעה</button>
+      <button type="button" data-view="prefs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>העדפות</button>
+    </nav>
+
+    <!-- home -->
+    <section class="view" id="view-home">
+      <div class="panel intent">
+        <span class="eyebrow">ספר לי מה התוכנית</span>
+        <label for="intent" class="hint">כתוב במילים שלך. אני אהפוך את זה לתנאי חיפוש, ותוכל לתקן כל תנאי.</label>
+        <textarea id="intent">אני צריך להגיע לעבודה עד 8:30, מעדיף כמה שפחות הליכה, ויש לי עשר דקות לקנות קפה בדרך.</textarea>
+        <div class="examples" id="examples">
+          <button type="button" class="chip">תמצא לי דרך בלי החלפה בתחנה המרכזית</button>
+          <button type="button" class="chip">אני מוכן לאחר בחמש דקות אם אחסוך הליכה</button>
+          <button type="button" class="chip">תן לי מסלול עם סיכוי גבוה לא לפספס את הרכבת</button>
+        </div>
+        <div>
+          <div class="eyebrow" style="margin-bottom:6px">הבנתי</div>
+          <div class="understood" id="understood" aria-live="polite"></div>
+          <p class="unparsed" id="unparsed" hidden></p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="od">
+          <div class="od-rows">
+            <div class="od-row"><span class="dot" aria-hidden="true"></span><select id="from" aria-label="מוצא"></select></div>
+            <div class="od-row"><span class="dot to" aria-hidden="true"></span><select id="to" aria-label="יעד"></select></div>
+          </div>
+          <button type="button" class="swap" id="swap" aria-label="החלפת מוצא ויעד"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/></svg></button>
+        </div>
+        <div class="saved" id="saved" aria-label="מקומות שמורים"></div>
+        <button type="button" class="go" id="go">הראה לי איך להגיע <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      </div>
+      <p class="foot">אב־טיפוס עיצוב. הקווים, הזמנים, התחזיות והלמידה האישית כאן הם נתוני הדגמה, כדי לבחון את החוויה לפני חיבור לנתונים אמיתיים. האתר שעובד עם לוחות זמנים אמיתיים נמצא בנפרד.</p>
+    </section>
+
+    <!-- options -->
+    <section class="view" id="view-options" hidden>
+      <div class="panel">
+        <div class="tools"><h2 id="opt-title">חלופות</h2><button type="button" class="ghost" id="surprise">הפתע אותי</button></div>
+        <div class="balance">
+          <div class="slider"><label for="w-speed">מהירות</label><input type="range" id="w-speed" min="0" max="100" value="60"><output for="w-speed" id="o-speed">60</output></div>
+          <div class="slider"><label for="w-comfort">נוחות</label><input type="range" id="w-comfort" min="0" max="100" value="50"><output for="w-comfort" id="o-comfort">50</output></div>
+          <div class="slider"><label for="w-rel">אמינות</label><input type="range" id="w-rel" min="0" max="100" value="50"><output for="w-rel" id="o-rel">50</output></div>
+        </div>
+        <p class="hint" id="cond-line"></p>
+      </div>
+      <div class="cards" id="cards" aria-live="polite"></div>
+    </section>
+
+    <!-- trip -->
+    <section class="view" id="view-trip" hidden>
+      <div class="phase" id="phase" aria-live="polite"></div>
+      <div class="panel sim">
+        <div class="eyebrow">הדמיית נסיעה</div>
+        <div class="sim-row">
+          <button type="button" class="ghost" id="play">הפעל</button>
+          <input type="range" id="t" min="0" max="100" value="0" aria-label="זמן בהדמיה">
+          <span class="num" id="t-label">07:20</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="delay"> הדגם עיכוב של 6 דקות בנסיעה הראשונה</label>
+        <p class="hint">גרור את הזמן או לחץ "הפעל". המסך מראה בכל רגע רק את מה שצריך עכשיו: מתי לצאת, לאן ללכת, כמה זמן נשאר להחלפה.</p>
+      </div>
+    </section>
+
+    <!-- preferences -->
+    <section class="view" id="view-prefs" hidden>
+      <div class="panel pref-list">
+        <h2>מה חשוב לך</h2>
+        <div class="balance">
+          <div class="slider"><label for="p-speed">מהירות</label><input type="range" id="p-speed" min="0" max="100"><output id="po-speed"></output></div>
+          <div class="slider"><label for="p-comfort">נוחות</label><input type="range" id="p-comfort" min="0" max="100"><output id="po-comfort"></output></div>
+          <div class="slider"><label for="p-rel">אמינות</label><input type="range" id="p-rel" min="0" max="100"><output id="po-rel"></output></div>
+        </div>
+        <div><div class="eyebrow" style="margin-bottom:6px">הליכה</div><div class="seg" id="p-walk" role="group" aria-label="הליכה"><button type="button" data-v="less">כמה שפחות</button><button type="button" data-v="normal">רגיל</button><button type="button" data-v="more">לא אכפת לי</button></div></div>
+        <div><div class="eyebrow" style="margin-bottom:6px">החלפות</div><div class="seg" id="p-xfer" role="group" aria-label="החלפות"><button type="button" data-v="0">בלי</button><button type="button" data-v="1">עד אחת</button><button type="button" data-v="2">לא משנה</button></div></div>
+        <div><div class="eyebrow" style="margin-bottom:6px">תחנות החלפה מועדפות</div><div class="chips" id="p-stations"></div></div>
+        <button type="button" class="ghost" id="reset" style="justify-self:start">איפוס להגדרות ההתחלה</button>
+      </div>
+      <div class="panel">
+        <h2>מה למדתי עליך</h2>
+        <dl class="learn">
+          <dt>נסיעות מתועדות</dt><dd>3 (הדגמה)</dd>
+          <dt>קצב הליכה</dt><dd>4.4 קמ״ש · ביטחון נמוך</dd>
+          <dt>החלפה מוכרת</dt><dd>ארלוזורוב ← סבידור</dd>
+          <dt>שעת יציאה רגילה</dt><dd>בסביבות 07:25</dd>
+        </dl>
+        <p class="hint">בגרסה האמיתית הלמידה תהיה רק בהסכמה, ותוכל לראות ולמחוק כל דבר שנשמר. עם מעט נסיעות ההערכה מסומנת כביטחון נמוך.</p>
+      </div>
+    </section>
+  </div>
+
+  <aside class="stage" aria-label="המסלול הנבחר">
+    <div class="panel">
+      <div class="stage-head"><h2 id="stage-title">המסלול</h2><span class="eta" id="stage-eta"></span></div>
+      <div class="journey" id="journey"></div>
+      <p class="hint" id="stage-note"></p>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ---------------- demo data: fictional lines and times, for the design only ---------------- */
+const PLACES = {
+  home: { name: 'בית', detail: 'ביאליק, רמת גן' },
+  work: { name: 'עבודה', detail: 'הרצליה פיתוח' },
+  uni: { name: 'אוניברסיטה', detail: 'רמת אביב' },
+  gym: { name: 'חדר כושר', detail: 'מתחם שרונה' }
+};
+const NOW = 7 * 60 + 20;
+// one demo trip home → work; segments in minutes. coffee: where a café sits on the way and how long until the next ride
+const OPTIONS = [
+  { id: 'lrt-rail', name: 'רכבת קלה ורכבת', reliability: .78, relWhy: 'מעבר קבוע בסבידור, רכבת כל 10 דק׳', coffee: { at: 'סבידור', slack: 3, headway: 10 },
+    segs: [
+      { type: 'walk', min: 8, to: 'ת. ביאליק', note: 'כולל 5 דק׳ ירידה לרציף' },
+      { type: 'wait', min: 2, at: 'ביאליק' },
+      { type: 'lrt', min: 6, line: 'אדום', from: 'ביאליק', to: 'ארלוזורוב', stops: 3 },
+      { type: 'transfer', min: 12, from: 'ארלוזורוב', to: 'רכבת סבידור', note: 'עלייה מהמנהרה, הליכה וכניסה לתחנה' },
+      { type: 'wait', min: 3, at: 'סבידור', xfer: true },
+      { type: 'rail', min: 9, line: 'רכבת', from: 'סבידור', to: 'הרצליה', stops: 2 },
+      { type: 'walk', min: 11, to: 'עבודה' }
+    ] },
+  { id: 'bus-direct', name: 'אוטובוס ישיר', reliability: .58, relWhy: 'נוסע באיילון בשעת עומס', coffee: null,
+    segs: [
+      { type: 'walk', min: 4, to: 'ז׳בוטינסקי/ביאליק' },
+      { type: 'wait', min: 6, at: 'ז׳בוטינסקי/ביאליק' },
+      { type: 'bus', min: 41, line: '92', from: 'ז׳בוטינסקי/ביאליק', to: 'אבא אבן/המנופים', stops: 19 },
+      { type: 'walk', min: 6, to: 'עבודה' }
+    ] },
+  { id: 'bus-rail', name: 'אוטובוס ורכבת', reliability: .72, relWhy: 'החלפה עם 6 דק׳ מרווח', coffee: { at: 'רכבת בני ברק', slack: 6, headway: 15 },
+    segs: [
+      { type: 'walk', min: 3, to: 'ביאליק/הרא״ה' },
+      { type: 'wait', min: 4, at: 'ביאליק/הרא״ה' },
+      { type: 'bus', min: 9, line: '67', from: 'ביאליק/הרא״ה', to: 'רכבת בני ברק', stops: 6 },
+      { type: 'transfer', min: 4, from: 'תחנת האוטובוס', to: 'רכבת בני ברק' },
+      { type: 'wait', min: 6, at: 'בני ברק', xfer: true },
+      { type: 'rail', min: 12, line: 'רכבת', from: 'בני ברק', to: 'הרצליה', stops: 3 },
+      { type: 'walk', min: 11, to: 'עבודה' }
+    ] },
+  { id: 'two-bus', name: 'שני אוטובוסים', reliability: .52, relWhy: 'החלפה ברחוב, אוטובוס שני כל 12 דק׳', coffee: null,
+    segs: [
+      { type: 'walk', min: 5, to: 'ביאליק/ז׳בוטינסקי' },
+      { type: 'wait', min: 3, at: 'ביאליק/ז׳בוטינסקי' },
+      { type: 'bus', min: 14, line: '51', from: 'ביאליק/ז׳בוטינסקי', to: 'מחלף גהה', stops: 8 },
+      { type: 'wait', min: 5, at: 'מחלף גהה', xfer: true },
+      { type: 'bus', min: 22, line: '29', from: 'מחלף גהה', to: 'שד׳ אבא אבן', stops: 11 },
+      { type: 'walk', min: 2, to: 'עבודה' }
+    ] },
+  { id: 'least-walk', name: 'כמעט בלי הליכה', reliability: .66, relWhy: 'מסוף ארלוזורוב, אוטובוסים תכופים', coffee: { at: 'מסוף ארלוזורוב', slack: 4, headway: 8 },
+    segs: [
+      { type: 'walk', min: 1, to: 'ביאליק/הבונים' },
+      { type: 'wait', min: 9, at: 'ביאליק/הבונים' },
+      { type: 'bus', min: 18, line: '55', from: 'ביאליק/הבונים', to: 'מסוף ארלוזורוב', stops: 10 },
+      { type: 'transfer', min: 3, from: 'רציף 4', to: 'רציף 9' },
+      { type: 'wait', min: 4, at: 'מסוף ארלוזורוב', xfer: true },
+      { type: 'bus', min: 17, line: '501', from: 'מסוף ארלוזורוב', to: 'הרצליה פיתוח', stops: 7 },
+      { type: 'walk', min: 1, to: 'עבודה' }
+    ] }
+];
+const STATIONS = ['סבידור', 'ארלוזורוב', 'בני ברק', 'מחלף גהה', 'התחנה המרכזית'];
+const MODE = { bus: 'אוטובוס', rail: 'רכבת', lrt: 'רכבת קלה', walk: 'הליכה', wait: 'המתנה', transfer: 'מעבר' };
+const ICON = {
+  bus: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v13a1 1 0 0 1-1 1v2h-2.5v-2h-7v2H6v-2a1 1 0 0 1-1-1zm2 2v5h10V6z"/></svg>',
+  rail: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c4 0 7 .5 7 4v10a3 3 0 0 1-2 2.8l1.5 2.2h-2.3l-1.4-2H9.2l-1.4 2H5.5L7 18.8A3 3 0 0 1 5 16V6c0-3.5 3-4 7-4m-5 5v4h10V7z"/></svg>',
+  lrt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 1h6v2h-2v2h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2l1.5 3h-2.2l-1.5-3H10.2l-1.5 3H6.5L8 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3V3H9zM8 8v4h8V8z"/></svg>'
+};
+
+/* ---------------- state ---------------- */
+const DEFAULTS = { speed: 60, comfort: 50, rel: 50, walk: 'normal', xfer: '2', stations: ['סבידור'] };
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const prefs = { ...DEFAULTS, ...store.get('am-prefs', {}) };
+const state = { from: 'home', to: 'work', cond: {}, selected: null, view: 'home', t: 0, delay: false, surprise: null };
+const $ = id => document.getElementById(id);
+const clock = m => { const x = ((Math.round(m) % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------------- intent: simple Hebrew phrase matching, no AI ---------------- */
+const NUMS = { 'אחת': 1, 'שתיים': 2, 'שתי': 2, 'שלוש': 3, 'ארבע': 4, 'חמש': 5, 'שש': 6, 'שבע': 7, 'שמונה': 8, 'תשע': 9, 'עשר': 10, 'רבע': 15, 'עשרים': 20, 'חצי': 30 };
+const numWord = s => /^\d+$/.test(s) ? Number(s) : NUMS[s];
+function parseIntent(text) {
+  const c = {}, used = [];
+  const take = (re, fn) => { const m = text.match(re); if (m) { fn(m); used.push(m[0]); } };
+  take(/(?:עד|לפני)\s*(?:ה?שעה\s*)?(\d{1,2})(?:[:.](\d{2}))?/, m => { c.arriveBy = Number(m[1]) * 60 + Number(m[2] || 0); });
+  take(/(?:לעבודה|למשרד)/, () => { c.to = 'work'; });
+  take(/(?:הביתה|לבית)/, () => { c.to = 'home'; });
+  take(/לאוניברסיטה/, () => { c.to = 'uni'; });
+  take(/(?:פחות|מעט|בלי)\s+(?:ה)?ליכה|כמה שפחות הליכה|לא ללכת/, () => { c.lessWalk = true; });
+  take(/בלי\s+החלפ(?:ה|ות)\s+ב(?:תחנה\s+)?(ה?\S+(?:\s+\S+)?)/, m => { const st = STATIONS.find(s => m[1].includes(s.replace('התחנה ', '')) || s.includes(m[1].replace(/^ה/, ''))) || m[1]; c.avoid = st; });
+  if (!c.avoid) take(/בלי\s+החלפ(?:ה|ות)/, () => { c.noTransfer = true; });
+  take(/לא\s+לפספס|סיכוי\s+גבוה|בטוח|אמין/, () => { c.reliable = true; });
+  take(/(?:הכי\s+)?מהר|כמה\s+שיותר\s+מוקדם/, () => { c.fast = true; });
+  take(/(?:לאחר|לאחר|איחור\s+של)\s+ב?(\S+)\s+דקות/, m => { const n = numWord(m[1]); if (n) c.lateOk = n; });
+  take(/(\S+)\s+דקות\s+(?:ל|כדי\s+ל)?(?:קנות\s+)?קפה|קפה/, m => { c.coffee = numWord(m[1]) || 10; });
+  // what was not understood: words left after removing the matched parts and filler
+  let rest = text;
+  for (const u of used) rest = rest.replace(u, ' ');
+  rest = rest.replace(/אני|צריך|רוצה|מעדיף|להגיע|ויש|יש|לי|בדרך|תמצא|תן|דרך|מסלול|עם|אם|אחסוך|מוכן|[,.!?]/g, ' ').replace(/\s+/g, ' ').trim();
+  return { c, rest: rest.split(' ').filter(w => w.length > 2).join(' ') };
+}
+const COND_TEXT = {
+  arriveBy: v => `הגעה עד <b class="num">${clock(v)}</b>`, to: v => `יעד: <b>${PLACES[v].name}</b>`, lessWalk: () => '<b>כמה שפחות הליכה</b>',
+  avoid: v => `בלי החלפה ב<b>${esc(v)}</b>`, noTransfer: () => '<b>בלי החלפות</b>', reliable: () => '<b>לא לפספס</b> (אמינות גבוהה)', fast: () => '<b>הכי מהר</b>',
+  lateOk: v => `מותר לאחר עד <b>${v}</b> דק׳ אם זה חוסך הליכה`, coffee: v => `<b>${v}</b> דק׳ לקפה בדרך`
+};
+const condText = (k, v) => COND_TEXT[k](v);
+function applyIntent() {
+  const { c, rest } = parseIntent($('intent').value);
+  state.cond = c;
+  if (c.to) state.to = c.to;
+  const w = { speed: prefs.speed, comfort: prefs.comfort, rel: prefs.rel };
+  if (c.lessWalk) w.comfort = Math.max(w.comfort, 85);
+  if (c.reliable) w.rel = Math.max(w.rel, 85);
+  if (c.fast) w.speed = Math.max(w.speed, 90);
+  setSliders(w);
+  renderUnderstood(rest);
+  syncOD();
+}
+function renderUnderstood(rest) {
+  const keys = Object.keys(state.cond);
+  $('understood').innerHTML = keys.length
+    ? keys.map(k => `<span class="cond">${condText(k, state.cond[k])}<button type="button" data-k="${k}" aria-label="הסרת התנאי">×</button></span>`).join('')
+    : '<span class="hint">עוד לא זיהיתי תנאים. אפשר לכתוב שעה, "פחות הליכה", "בלי החלפה" או "קפה".</span>';
+  $('unparsed').hidden = !rest;
+  $('unparsed').textContent = rest ? `לא הבנתי את החלק: "${rest}". אם זה חשוב, נסח אחרת או בחר בהעדפות.` : '';
+}
+
+/* ---------------- options: totals, coffee, lateness and ranking ---------------- */
+function evaluate(o) {
+  const c = state.cond;
+  let total = o.segs.reduce((a, s) => a + s.min, 0);
+  let coffee = null;
+  if (c.coffee) {
+    if (o.coffee) { const extra = c.coffee <= o.coffee.slack ? 0 : Math.ceil((c.coffee - o.coffee.slack) / o.coffee.headway) * o.coffee.headway; total += extra; coffee = { at: o.coffee.at, extra }; }
+    else coffee = { none: true };
+  }
+  const walk = o.segs.filter(s => s.type === 'walk' || s.type === 'transfer').reduce((a, s) => a + s.min, 0);
+  const wait = o.segs.filter(s => s.type === 'wait').reduce((a, s) => a + s.min, 0);
+  const rides = o.segs.filter(s => ['bus', 'rail', 'lrt'].includes(s.type));
+  const transfers = Math.max(0, rides.length - 1);
+  const xferAt = o.segs.filter(s => s.xfer).map(s => s.at);
+  const depart = c.arriveBy ? Math.max(NOW, c.arriveBy - total) : NOW;
+  const arrive = depart + total;
+  const late = c.arriveBy ? Math.max(0, arrive - c.arriveBy) : 0;
+  const comfort = Math.max(0, Math.min(1, 1 - walk / 50 - transfers * .1 - wait / 90));
+  const blocked = (c.noTransfer && transfers > 0) || (c.avoid && xferAt.some(a => c.avoid.includes(a) || a.includes(c.avoid))) || (prefs.xfer === '0' && transfers > 0) || (prefs.xfer === '1' && transfers > 1);
+  const preferred = xferAt.some(a => prefs.stations.some(s => a.includes(s) || s.includes(a)));
+  return { ...o, total, walk, wait, rides, transfers, depart, arrive, late, comfort, coffeePlan: coffee, blocked, preferred };
+}
+function rank() {
+  const w = { speed: +$('w-speed').value, comfort: +$('w-comfort').value, rel: +$('w-rel').value };
+  const sum = w.speed + w.comfort + w.rel || 1;
+  const list = OPTIONS.map(evaluate);
+  const span = (f) => { const v = list.map(f); const lo = Math.min(...v), hi = Math.max(...v); return x => hi === lo ? 0 : (x - lo) / (hi - lo); };
+  const nT = span(o => o.total), nW = span(o => o.walk + o.transfers * 4), nR = span(o => 1 - o.reliability);
+  const lateOk = state.cond.lateOk || 0;
+  for (const o of list) {
+    o.score = (w.speed * nT(o.total) + w.comfort * nW(o.walk + o.transfers * 4) + w.rel * nR(1 - o.reliability)) / sum;
+    if (o.late > lateOk) o.score += 1 + o.late / 10;          // misses the deadline
+    else if (o.late > 0 && o.walk >= 10) o.score += .5;       // late is only fine when it saves walking
+    if (o.preferred) o.score -= .05;
+    if (o.blocked) o.score += 3;
+    if (state.cond.coffee && o.coffeePlan && o.coffeePlan.none) o.score += .4;
+  }
+  list.sort((a, b) => a.score - b.score);
+  return list;
+}
+const level = v => v >= .7 ? 'גבוהה' : v >= .55 ? 'בינונית' : 'נמוכה';
+
+/* ---------------- rendering: option cards with a FLIP re-order ---------------- */
+function renderCards(animate) {
+  const list = rank();
+  if (!state.selected || !list.some(o => o.id === state.selected)) state.selected = list[0].id;
+  const best = list[0];
+  const box = $('cards');
+  const before = new Map([...box.children].map(el => [el.dataset.id, el.getBoundingClientRect().top]));
+  box.innerHTML = list.map((o, i) => card(o, i, best)).join('');
+  if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    for (const el of box.children) {
+      const b = before.get(el.dataset.id); if (b == null) continue;
+      const dy = b - el.getBoundingClientRect().top; if (!dy) continue;
+      el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
+  }
+  const c = state.cond;
+  $('opt-title').textContent = `${PLACES[state.from].name} ← ${PLACES[state.to].name}`;
+  $('cond-line').innerHTML = [c.arriveBy ? `צריך להגיע עד ${clock(c.arriveBy)}` : `יציאה עכשיו, ${clock(NOW)}`, c.coffee ? `${c.coffee} דק׳ לקפה` : '', c.lateOk ? `מותר איחור של ${c.lateOk} דק׳` : ''].filter(Boolean).join(' · ') + '. הזז את המחוונים והדירוג ישתנה.';
+  renderStage();
+}
+function card(o, i, best) {
+  const tags = [];
+  if (i === 0) tags.push('<span class="badge rec">מומלץ לך</span>');
+  if (state.surprise === o.id) tags.push('<span class="badge">הפתעה</span>');
+  if (o.preferred) tags.push('<span class="badge">החלפה מועדפת</span>');
+  if (o.late) tags.push(`<span class="badge late">מאחר ${o.late} דק׳</span>`);
+  if (o.blocked) tags.push('<span class="badge late">לא עומד בתנאי</span>');
+  const strip = o.segs.map(s => `<i style="flex:${s.min} 1 0;background:${s.type === 'walk' || s.type === 'transfer' ? `repeating-linear-gradient(90deg,var(--walk) 0 4px,transparent 4px 7px)` : s.type === 'wait' ? 'color-mix(in srgb,var(--wait) 55%,transparent)' : `var(--${s.type})`}" title="${MODE[s.type]} ${s.min} דק׳"></i>`).join('');
+  let cost = '';
+  if (o !== best) {
+    const dt = o.arrive - best.arrive, dw = o.walk - best.walk;
+    const parts = [dt ? (dt > 0 ? `מגיע ${dt} דק׳ אחרי` : `מגיע ${-dt} דק׳ לפני`) : 'מגיע באותה שעה', dw ? (dw > 0 ? `${dw} דק׳ הליכה יותר` : `${-dw} דק׳ הליכה פחות`) : '', o.transfers !== best.transfers ? `${Math.abs(o.transfers - best.transfers)} החלפות ${o.transfers > best.transfers ? 'יותר' : 'פחות'}` : ''];
+    cost = `<div class="cost">לעומת המומלץ: ${parts.filter(Boolean).join(', ')}</div>`;
+  }
+  const cp = o.coffeePlan;
+  const coffee = !cp ? '' : cp.none ? ' · אין בית קפה בדרך' : ` · קפה ב${esc(cp.at)}${cp.extra ? ` (+${cp.extra} דק׳ לרכבת או לאוטובוס הבא)` : ' בלי לאבד זמן'}`;
+  return `<button type="button" class="card" data-id="${o.id}" aria-pressed="${state.selected === o.id}">
+    <div class="card-top"><div><div class="card-name">${o.name}</div><div class="badges">${tags.join('')}</div></div><div class="big">${o.total}<small>דק׳</small></div></div>
+    <div class="times">צא ב־<b class="num">${clock(o.depart)}</b> · הגעה <b class="num">${clock(o.arrive)}</b>${coffee}</div>
+    <div class="strip" aria-hidden="true">${strip}</div>
+    <div class="facts"><span>הליכה <b>${o.walk}</b> דק׳</span><span>המתנה <b>${o.wait}</b> דק׳</span><span><b>${o.transfers === 0 ? 'ללא' : o.transfers}</b> ${o.transfers === 1 ? 'החלפה' : 'החלפות'}</span></div>
+    <div class="meters">
+      <div class="meter"><span>נוחות <b>${level(o.comfort)}</b></span><span class="bar"><span style="width:${Math.round(o.comfort * 100)}%"></span></span></div>
+      <div class="meter"><span>אמינות <b>${level(o.reliability)}</b> · ${esc(o.relWhy)}</span><span class="bar"><span style="width:${Math.round(o.reliability * 100)}%"></span></span></div>
+    </div>
+    ${i === 0 ? `<div class="why">${why(o)}</div>` : ''}${cost}
+  </button>`;
+}
+function why(o) {
+  const w = { speed: +$('w-speed').value, comfort: +$('w-comfort').value, rel: +$('w-rel').value };
+  const top = Object.entries(w).sort((a, b) => b[1] - a[1])[0][0];
+  const lead = { speed: 'ביקשת לשים מהירות קודם', comfort: 'ביקשת נוחות', rel: 'ביקשת אמינות' }[top];
+  const bits = [];
+  if (top === 'speed') bits.push(`מגיע ב־${clock(o.arrive)}`);
+  if (top === 'comfort') bits.push(`רק ${o.walk} דק׳ הליכה`);
+  if (top === 'rel') bits.push(`אמינות ${level(o.reliability)}: ${o.relWhy}`);
+  if (o.preferred) bits.push('ומחליף בתחנה שאתה מעדיף');
+  if (state.cond.arriveBy && !o.late) bits.push(`ומגיע בזמן גם אם תצא ב־${clock(o.depart)}`);
+  return `${lead}: ${bits.join(', ')}.`;
+}
+
+/* ---------------- stage: the selected trip as a live, time-proportional line ---------------- */
+function current() { return rank().find(o => o.id === state.selected) || rank()[0]; }
+function renderStage() {
+  const o = current();
+  const delay = state.view === 'trip' && state.delay ? 6 : 0;
+  $('stage-title').textContent = o.name;
+  $('stage-eta').innerHTML = `הגעה <b>${clock(o.arrive + delay)}</b>${delay ? ' (עם העיכוב)' : ''}`;
+  const unit = 7; // px per minute: the line's lengths show time, not distance
+  let t = o.depart, firstRide = true, rows = '';
+  o.segs.forEach((s, i) => {
+    let min = s.min;
+    if (delay && firstRide && ['bus', 'rail', 'lrt'].includes(s.type)) { min += delay; firstRide = false; }
+    else if (['bus', 'rail', 'lrt'].includes(s.type)) firstRide = false;
+    const h = Math.max(30, min * unit);
+    const isRide = ['bus', 'rail', 'lrt'].includes(s.type);
+    const color = isRide ? `var(--${s.type})` : '';
+    const node = s.xfer || s.type === 'transfer' ? 'j-node xfer' : 'j-node';
+    const title = isRide ? `<span class="line-tag" style="background:var(--${s.type})">${ICON[s.type]}${s.type === 'rail' ? 'רכבת' : esc(s.line)}</span> ${MODE[s.type]} ל${esc(s.to)}`
+      : s.type === 'walk' ? `הליכה ל${esc(s.to)}` : s.type === 'transfer' ? `מעבר ל${esc(s.to)}` : s.xfer ? `החלפה ב${esc(s.at)}` : `המתנה ב${esc(s.at)}`;
+    const sub = isRide ? `${s.stops} תחנות · ירידה ב${esc(s.to)}${delay && min !== s.min ? ` · <span style="color:var(--risk)">עיכוב ${delay} דק׳</span>` : ''}` : s.note ? esc(s.note) : '';
+    rows += `<div class="j-row"><div class="j-time">${clock(t)}</div><div class="j-track" style="height:${h}px"><span class="j-seg ${s.type === 'walk' || s.type === 'transfer' ? 'walk' : s.type === 'wait' ? 'wait' : ''} j-draw" style="height:100%;background:${color};animation-delay:${i * 60}ms"></span><span class="${node}"></span></div>
+      <div class="j-body"><div class="j-title">${title}</div><div class="j-sub">${sub}${sub ? ' · ' : ''}<span class="num">${min}</span> דק׳ <span class="src">${s.type === 'walk' || s.type === 'transfer' ? 'הערכה' : 'הדגמה'}</span></div></div></div>`;
+    t += min;
+  });
+  rows += `<div class="j-row"><div class="j-time">${clock(t)}</div><div class="j-track" style="height:24px"><span class="j-node" style="background:var(--fg)"></span></div><div class="j-body"><div class="j-title">הגעה ל${PLACES[state.to].name}</div><div class="j-sub">${esc(PLACES[state.to].detail)}</div></div></div>`;
+  $('journey').innerHTML = rows + '<span class="progress-dot" id="pdot" hidden></span>';
+  $('stage-note').textContent = 'אורך כל קטע בקו מראה כמה זמן הוא לוקח, לא מרחק. נקודות טורקיז: החלפות.';
+  if (state.view === 'trip') renderTrip();
+}
+
+/* ---------------- trip mode: what matters right now ---------------- */
+function tripTimeline(o) {
+  const delay = state.delay ? 6 : 0;
+  let t = o.depart, first = true;
+  return o.segs.map(s => {
+    let min = s.min;
+    if (['bus', 'rail', 'lrt'].includes(s.type)) { if (first && delay) min += delay; first = false; }
+    const seg = { ...s, t0: t, t1: t + min };
+    t += min;
+    return seg;
+  });
+}
+function renderTrip() {
+  const o = current(), segs = tripTimeline(o);
+  const start = o.depart - 8, end = segs[segs.length - 1].t1;
+  const now = start + (end - start) * state.t / 100;
+  $('t-label').textContent = clock(now);
+  const box = $('phase');
+  box.classList.remove('risk');
+  let html;
+  const idx = segs.findIndex(s => now >= s.t0 && now < s.t1);
+  const s = segs[idx];
+  // the planned transfer: is the next ride still reachable after a delay?
+  const xferRisk = state.delay && o.transfers > 0;
+  if (now < o.depart) {
+    const m = Math.ceil(o.depart - now);
+    html = `<span class="eyebrow">לפני היציאה</span><div class="countdown">${m} דק׳</div><div class="phase-main">צא ב־${clock(o.depart)} ל${esc(o.segs[0].to)}</div><div class="phase-sub">הגעה צפויה ${clock(end)} · ${o.name}</div>`;
+  } else if (!s) {
+    html = `<span class="eyebrow">הגעת</span><div class="phase-main">הגעת ל${PLACES[state.to].name} ב־${clock(end)}</div><div class="phase-sub">${state.cond.arriveBy ? (end <= state.cond.arriveBy ? 'בזמן.' : `באיחור של ${end - state.cond.arriveBy} דק׳.`) : ''}</div>`;
+  } else {
+    const left = Math.ceil(s.t1 - now);
+    const next = segs.slice(idx + 1).find(x => ['bus', 'rail', 'lrt'].includes(x.type));
+    if (s.type === 'walk') html = `<span class="eyebrow">בדרך</span><div class="phase-main">הליכה ל${esc(s.to)}</div><div class="countdown">${left} דק׳</div><div class="phase-sub">${s.note ? esc(s.note) + ' · ' : ''}${next ? `אחר כך ${MODE[next.type]} ${next.type === 'rail' ? '' : esc(next.line)} ב־${clock(next.t0)}` : 'ואתה שם'}</div>`;
+    else if (s.type === 'wait') html = `<span class="eyebrow">${s.xfer ? 'החלפה' : 'בתחנה'}</span><div class="phase-main">${next ? `${MODE[next.type]} ${next.type === 'rail' ? '' : esc(next.line)} מגיע בעוד ${left} דק׳` : 'ממתין'}</div><div class="phase-sub">${esc(s.at)}${o.coffeePlan && !o.coffeePlan.none && s.xfer ? ` · זמן לקפה: ${left} דק׳` : ''}</div>`;
+    else if (s.type === 'transfer') {
+      const nextRide = next;
+      const slack = nextRide ? Math.round(nextRide.t0 - s.t1) : 0;
+      html = `<span class="eyebrow">החלפה</span><div class="phase-main">לך ל${esc(s.to)}</div><div class="countdown">${left} דק׳</div><div class="phase-sub">${esc(s.note || '')}${nextRide ? ` · ${MODE[nextRide.type]} יוצא ב־${clock(nextRide.t0)}, מרווח ${slack} דק׳` : ''}</div>`;
+    } else {
+      const stopsLeft = Math.max(1, Math.round(s.stops * (s.t1 - now) / (s.t1 - s.t0)));
+      html = `<span class="eyebrow">בנסיעה</span><div class="phase-main">רד ב${esc(s.to)} בעוד ${stopsLeft} ${stopsLeft === 1 ? 'תחנה' : 'תחנות'}</div><div class="countdown">${left} דק׳</div><div class="phase-sub">${MODE[s.type]} ${s.type === 'rail' ? '' : esc(s.line)} · ירידה צפויה ${clock(s.t1)}</div>`;
+      if (xferRisk && next && idx === segs.findIndex(x => ['bus', 'rail', 'lrt'].includes(x.type))) {
+        box.classList.add('risk');
+        html += `<div class="alt"><b>ההחלפה בסיכון.</b> עם העיכוב תגיע ל${esc(next.from)} כשהקו הבא כבר יצא. חלופה: ${o.coffee ? `הרכבת או האוטובוס הבאים מ${esc(next.from)} בעוד ${o.coffee.headway} דק׳` : 'הקו הבא בעוד 12 דק׳'}. ההערכה מבוססת על נתוני הדגמה.</div>`;
+      }
+    }
+  }
+  box.innerHTML = html;
+  // the progress dot on the live line
+  const dot = $('pdot');
+  if (dot) {
+    const rows = [...$('journey').querySelectorAll('.j-track')];
+    const k = now < o.depart ? -1 : idx < 0 ? rows.length - 1 : idx;
+    if (k < 0) dot.hidden = true;
+    else {
+      const r = rows[k], frac = idx < 0 ? 0 : (now - segs[k].t0) / (segs[k].t1 - segs[k].t0);
+      dot.hidden = false;
+      dot.style.top = `${r.offsetTop + r.offsetHeight * frac}px`;
+    }
+  }
+}
+
+/* ---------------- views, controls ---------------- */
+function show(view) {
+  state.view = view;
+  for (const v of ['home', 'options', 'trip', 'prefs']) $('view-' + v).hidden = v !== view;
+  document.querySelectorAll('.nav button').forEach(b => { if (b.dataset.view === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  if (view === 'options') renderCards(false);
+  renderStage();
+}
+function setSliders(w) { for (const k of ['speed', 'comfort', 'rel']) { $('w-' + k).value = w[k]; $('o-' + k).textContent = w[k]; } }
+function syncOD() {
+  const opts = Object.entries(PLACES).map(([k, p]) => `<option value="${k}">${p.name} · ${p.detail}</option>`).join('');
+  $('from').innerHTML = opts; $('to').innerHTML = opts;
+  $('from').value = state.from; $('to').value = state.to;
+  $('saved').innerHTML = Object.entries(PLACES).filter(([k]) => k !== state.from).map(([k, p]) => `<button type="button" class="chip" data-to="${k}" aria-pressed="${state.to === k}">${p.name}</button>`).join('');
+}
+function syncPrefs() {
+  for (const k of ['speed', 'comfort', 'rel']) { $('p-' + k).value = prefs[k]; $('po-' + k).textContent = prefs[k]; }
+  [...$('p-walk').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.v === prefs.walk));
+  [...$('p-xfer').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.v === prefs.xfer));
+  $('p-stations').innerHTML = STATIONS.map(s => `<button type="button" class="chip" data-s="${s}" aria-pressed="${prefs.stations.includes(s)}">${s}</button>`).join('');
+}
+function toast(text) {
+  let t = document.querySelector('.toast');
+  if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = text; t.hidden = false; clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 3200);
+}
+
+document.querySelector('.nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) show(b.dataset.view); });
+$('intent').addEventListener('input', () => { clearTimeout(window._ih); window._ih = setTimeout(applyIntent, 250); });
+$('examples').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; $('intent').value = b.textContent; applyIntent(); });
+$('understood').addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (!b) return; delete state.cond[b.dataset.k]; renderUnderstood(''); });
+$('from').onchange = e => { state.from = e.target.value; syncOD(); };
+$('to').onchange = e => { state.to = e.target.value; syncOD(); };
+$('swap').onclick = () => { [state.from, state.to] = [state.to, state.from]; syncOD(); };
+$('saved').addEventListener('click', e => { const b = e.target.closest('[data-to]'); if (b) { state.to = b.dataset.to; syncOD(); } });
+$('go').onclick = () => {
+  if (state.from === state.to) { toast('המוצא והיעד זהים. בחר יעד אחר.'); return; }
+  if (!(state.from === 'home' && state.to === 'work')) toast('בהדגמה יש מסלולים רק מהבית לעבודה. מציג אותם.');
+  state.from = 'home'; state.to = 'work'; state.selected = null; state.surprise = null; syncOD(); show('options');
+};
+for (const k of ['speed', 'comfort', 'rel']) $('w-' + k).addEventListener('input', e => { $('o-' + k).textContent = e.target.value; state.selected = null; renderCards(true); });
+$('cards').addEventListener('click', e => {
+  const b = e.target.closest('.card'); if (!b) return;
+  if (state.selected === b.dataset.id) { show('trip'); return; }
+  state.selected = b.dataset.id; renderCards(false); toast('לחיצה נוספת על הכרטיס פותחת את מצב הנסיעה');
+});
+$('surprise').onclick = () => {
+  const list = rank(), best = list[0];
+  const mix = o => [...new Set(o.rides.map(r => r.type))].sort().join();
+  const pick = list.find(o => o !== best && !o.blocked && o.late <= (state.cond.lateOk || 0) && mix(o) !== mix(best)) || list[1];
+  state.surprise = pick.id; state.selected = pick.id; renderCards(false);
+  toast(`הצעה פחות שגרתית שעדיין עומדת בתנאים: ${pick.name}`);
+};
+let playing = null;
+$('play').onclick = () => {
+  if (playing) { clearInterval(playing); playing = null; $('play').textContent = 'הפעל'; return; }
+  if (+$('t').value >= 100) $('t').value = 0;
+  $('play').textContent = 'עצור';
+  playing = setInterval(() => { const v = Math.min(100, +$('t').value + .6); $('t').value = v; state.t = v; renderTrip(); if (v >= 100) $('play').click(); }, 80);
+};
+$('t').addEventListener('input', e => { state.t = +e.target.value; renderTrip(); });
+$('delay').onchange = e => { state.delay = e.target.checked; renderStage(); };
+for (const k of ['speed', 'comfort', 'rel']) $('p-' + k).addEventListener('input', e => { prefs[k] = +e.target.value; $('po-' + k).textContent = prefs[k]; store.set('am-prefs', prefs); setSliders(prefs); });
+$('p-walk').onclick = e => { const b = e.target.closest('button'); if (!b) return; prefs.walk = b.dataset.v; if (b.dataset.v === 'less') { prefs.comfort = Math.max(prefs.comfort, 80); } store.set('am-prefs', prefs); syncPrefs(); setSliders(prefs); };
+$('p-xfer').onclick = e => { const b = e.target.closest('button'); if (!b) return; prefs.xfer = b.dataset.v; store.set('am-prefs', prefs); syncPrefs(); };
+$('p-stations').onclick = e => { const b = e.target.closest('[data-s]'); if (!b) return; const s = b.dataset.s; prefs.stations = prefs.stations.includes(s) ? prefs.stations.filter(x => x !== s) : [...prefs.stations, s]; store.set('am-prefs', prefs); syncPrefs(); };
+$('reset').onclick = () => { Object.assign(prefs, DEFAULTS, { stations: [...DEFAULTS.stations] }); store.set('am-prefs', prefs); syncPrefs(); setSliders(prefs); toast('ההעדפות חזרו להגדרות ההתחלה'); };
+
+$('now-label').textContent = clock(NOW);
+syncOD(); syncPrefs(); setSliders(prefs); applyIntent(); renderCards(false); show('home');
+</script>

@@ -23,6 +23,7 @@
 - `docs/DATA_FORMAT.md` — איך נבנים קובצי הנתונים מה־GTFS ומה הפורמט שלהם.
 - `docs/REALTIME.md` — תכנון החיבור לזמן אמת (SIRI-SM של משרד התחבורה).
 - `docs/SITE.md` — האתר: מבנה, הרצה מקומית, פרסום ושירותים חיצוניים.
+- `docs/DESIGN_ADAPTIVE_MOBILITY.md` ו־`design-prototype/` — כיוון עיצובי ואב־טיפוס עיצוב עם נתוני הדגמה.
 - `site/`, `scripts/`, `tests/` — האתר, בניית הנתונים והבדיקות. `prototype-web/` — אב־הטיפוס הישן.
 
 ### לפני פיתוח

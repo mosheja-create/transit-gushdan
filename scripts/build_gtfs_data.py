@@ -1,14 +1,16 @@
 """Builds a full-day data file for the prototype from the Ministry of Transport GTFS.
 
 Downloads israel-public-transportation.zip (once; --refresh to download again), then keeps:
-  - every bus, light rail and shared taxi trip of the chosen date, cut to the stops inside one city;
+  - every bus, light rail and shared taxi trip of the chosen date, cut to the stops inside one city or a region;
   - every Israel Railways trip of that date, with all its stations across the country;
   - trips of the previous service day that run past midnight (their part after 00:00).
 
 Usage:
   python3 scripts/build_gtfs_data.py [--date YYYY-MM-DD] [--city "תל אביב יפו"] [--name tlv] [--refresh]
+  python3 scripts/build_gtfs_data.py --region gushdan --days 2 --out-dir public/data   (the site)
 
-Output: data/<name>_<date>_full.json, in the format GtfsSliceProvider reads (see docs/DATA_FORMAT.md).
+Output: data/<name>_<date>_full.json, or <out-dir>/<name>_<date>.json plus <out-dir>/manifest.json,
+in the format GtfsSliceProvider and site/js/engine.js read (see docs/DATA_FORMAT.md).
 The zip is kept in data/cache/, which is not part of the project files.
 """
 import argparse
@@ -23,6 +25,7 @@ import urllib.request
 import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 GTFS_URL = "https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip"
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,6 +36,12 @@ KEEP_TYPES = {"0", "2", "3", "8"}  # light rail, rail, bus, shared taxi; skips c
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 CITY_RE = re.compile(r"עיר:\s*(.*?)\s*רציף:")
 B36 = "0123456789abcdefghijklmnopqrstuvwxyz"
+REGIONS = {
+    # decision 18 in planning/DECISIONS.md; names as they appear after "עיר:" in stops.txt
+    "gushdan": ("גוש דן", ["תל אביב יפו", "רמת גן", "גבעתיים", "בני ברק", "חולון", "בת ים", "פתח תקווה", "ראשון לציון",
+                          "הרצליה", "רמת השרון", "קרית אונו", "אור יהודה", "יהוד מונוסון", "אזור", "גבעת שמואל",
+                          "גני תקווה", "סביון", "כפר שמריהו"]),
+}
 
 
 def b36(n):
@@ -96,33 +105,73 @@ def destination(long_name):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--date", default=dt.date.today().isoformat())
+    ap.add_argument("--date", default=dt.datetime.now(ZoneInfo("Asia/Jerusalem")).date().isoformat(), help="first date (default: today in Israel)")
+    ap.add_argument("--days", type=int, default=1, help="how many days from --date to build")
     ap.add_argument("--city", default="תל אביב יפו")
-    ap.add_argument("--name", default="tlv")
+    ap.add_argument("--region", choices=sorted(REGIONS), help="a set of cities instead of --city")
+    ap.add_argument("--name", help="file name prefix (default: tlv, or the region's key)")
+    ap.add_argument("--out-dir", help="write <name>_<date>.json files and manifest.json here instead of data/")
     ap.add_argument("--refresh", action="store_true", help="download the GTFS again even if it is cached")
     args = ap.parse_args()
-    day = dt.date.fromisoformat(args.date)
-    prev = day - dt.timedelta(days=1)
-    t_start = time.time()
+    if args.region:
+        label, cities = REGIONS[args.region]
+    else:
+        label, cities = args.city, [args.city]
+    name = args.name or args.region or "tlv"
+    out_dir = Path(args.out_dir).resolve() if args.out_dir else None
 
     download(args.refresh)
     zf = zipfile.ZipFile(CACHE)
     feed_time = dt.datetime(*zf.getinfo("stop_times.txt").date_time)
     cal_end = max(r["end_date"] for r in rows(zf, "calendar.txt"))
     cal_start = min(r["start_date"] for r in rows(zf, "calendar.txt"))
-    if not cal_start <= day.strftime("%Y%m%d") <= cal_end:
-        sys.exit(f"{day} is outside the feed's calendar ({cal_start}–{cal_end}); use --refresh or another --date")
+    first = dt.date.fromisoformat(args.date)
+    days = [first + dt.timedelta(days=i) for i in range(args.days)]
+    days = [d for d in days if cal_start <= d.strftime("%Y%m%d") <= cal_end]
+    if not days:
+        sys.exit(f"{args.date} is outside the feed's calendar ({cal_start}–{cal_end}); use --refresh or another --date")
 
     # stops: platforms fold into their parent station, so a station is one stop
     stops_raw = {r["stop_id"]: r for r in rows(zf, "stops.txt")}
     parent = {sid: (r["parent_station"] or sid) for sid, r in stops_raw.items()}
-    in_city = {sid for sid, r in stops_raw.items() if (m := CITY_RE.search(r["stop_desc"])) and m.group(1) == args.city}
+    wanted = set(cities)
+    in_city = {sid for sid, r in stops_raw.items() if (m := CITY_RE.search(r["stop_desc"])) and m.group(1) in wanted}
     in_city |= {sid for sid in stops_raw if parent[sid] in in_city}
+    found = {m.group(1) for r in stops_raw.values() if (m := CITY_RE.search(r["stop_desc"]))} & wanted
+    if wanted - found:
+        print("warning: no stops for", ", ".join(sorted(wanted - found)))
     if not in_city:
-        sys.exit(f"no stops found with city '{args.city}'")
+        sys.exit(f"no stops found for {label}")
 
     agencies = {r["agency_id"]: r["agency_name"] for r in rows(zf, "agency.txt")}
     routes = {r["route_id"]: r for r in rows(zf, "routes.txt") if r["route_type"] in KEEP_TYPES}
+    ctx = dict(zf=zf, feed_time=feed_time, cal=(cal_start, cal_end), stops_raw=stops_raw, parent=parent, in_city=in_city,
+               agencies=agencies, routes=routes, label=label, cities=cities)
+    written = [build_day(day, ctx, (out_dir / f"{name}_{day.isoformat()}.json") if out_dir else ROOT / "data" / f"{name}_{day.isoformat()}_full.json")
+               for day in days]
+    if out_dir:
+        write_manifest(out_dir, name, label, cities, feed_time, written)
+
+
+def write_manifest(out_dir, name, label, cities, feed_time, written):
+    # every day file present in the folder, not only the ones built now, minus ones that are already over
+    today = dt.datetime.now(ZoneInfo("Asia/Jerusalem")).date().isoformat()
+    files = sorted(f for f in out_dir.glob(f"{name}_*.json") if f.stem[len(name) + 1:] >= today)
+    manifest = {
+        "region": label, "cities": cities,
+        "generated": dt.datetime.now(ZoneInfo("Asia/Jerusalem")).isoformat(timespec="seconds"),
+        "feed": {"url": GTFS_URL, "published": feed_time.isoformat()},
+        "days": [{"date": f.stem[len(name) + 1:], "file": f.name, "bytes": f.stat().st_size} for f in files],
+    }
+    (out_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"wrote {out_dir / 'manifest.json'}: {', '.join(d['date'] for d in manifest['days'])}")
+
+
+def build_day(day, ctx, out):
+    zf, stops_raw, parent, in_city, routes, agencies = (ctx[k] for k in ("zf", "stops_raw", "parent", "in_city", "routes", "agencies"))
+    feed_time, (cal_start, cal_end) = ctx["feed_time"], ctx["cal"]
+    prev = day - dt.timedelta(days=1)
+    t_start = time.time()
 
     today_sv, prev_sv = active_services(zf, day), active_services(zf, prev)
     trips = {}  # trip_id -> (route_id, day_offset_minutes, headsign)
@@ -227,21 +276,23 @@ def main():
     data = {
         "date": day.isoformat(),
         "window": "00:00-24:00",
-        "city": args.city,
+        "city": ctx["label"],
+        "cities": ctx["cities"],
         "source": f"GTFS של משרד התחבורה (gtfs.mot.gov.il), קובץ מ־{feed_time:%d.%m.%Y %H:%M}",
         "feed": {"url": GTFS_URL, "published": feed_time.isoformat(), "calendar": [cal_start, cal_end]},
-        "scope": "כל הנסיעות של היום בתוך העיר, ורכבת ישראל בכל הארץ",
+        "scope": f"כל הנסיעות של היום בתחנות של {ctx['label']}, ורכבת ישראל בכל הארץ",
         "stops": out_stops,
         "routes": out_routes,
         "patterns": out_patterns,
     }
-    out = ROOT / "data" / f"{args.name}_{day.isoformat()}_full.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     n_trips = sum(len(v) for v in groups.values())
     n_rail = sum(len(v) for k, v in groups.items() if routes[route_list[k[0]]]["route_type"] == RAIL)
     print(f"wrote {out.relative_to(ROOT)} ({out.stat().st_size / 1e6:.1f} MB): {len(out_stops):,} stops, "
           f"{len(out_routes):,} routes, {len(out_patterns):,} patterns, {n_trips:,} trips ({n_rail:,} rail) "
           f"in {time.time() - t_start:.0f}s")
+    return out
 
 
 if __name__ == "__main__":

@@ -39,7 +39,7 @@ systemctl --user disable --now transit-daily.timer
 ## הממשק בקוד
 מקור זמן אמת הוא אובייקט עם `status` ועם `vehicle({ routeId, originDeparture })`. הוא מחזיר `{ lat, lon, dist, at }` או `null`. הזמנים הם בדקות מחצות של יום הנתונים.
 
-הפונקציה `estimateLive()` הופכת את המיקום להערכה. `StrideRealtime` הוא המימוש הנוכחי. `NoRealtime` הוא המימוש שמשמש כשאין חיבור. מקור אחר, כמו השרת העתידי מול SIRI-SM, צריך רק לממש את אותו ממשק.
+באתר הקוד נמצא ב־`site/js/realtime.js` (`StrideRealtime`, `NoRealtime`) וב־`site/js/engine.js` (`estimateLive`). באב־הטיפוס הוא בתוך `prototype-web/index.html`. הפונקציה `estimateLive()` הופכת את המיקום להערכה. `StrideRealtime` הוא המימוש הנוכחי. `NoRealtime` הוא המימוש שמשמש כשאין חיבור. מקור אחר, כמו השרת העתידי מול SIRI-SM, צריך רק לממש את אותו ממשק.
 
 ## המקור הקבוע: SIRI-SM של משרד התחבורה
 - מקבלים גישה בחתימה על טופס, ששולחים ל־ptsupport@mot.gov.il. אחרי זה מקבלים קוד משתמש.

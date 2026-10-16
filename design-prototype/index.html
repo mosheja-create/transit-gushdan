@@ -203,9 +203,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     <section class="view" id="view-home">
       <div class="panel intent">
         <span class="eyebrow">ספר לי מה התוכנית</span>
-        <label for="intent" class="hint">כתוב במילים שלך. אני אהפוך את זה לתנאי חיפוש, ותוכל לתקן כל תנאי.</label>
+        <label for="intent" class="hint">כתוב במילים שלך את פרטי הנסיעה (מאיפה, לאן, מתי) ומה חשוב לך. אני אהפוך את זה לתנאי חיפוש, ותוכל לתקן כל תנאי.</label>
         <textarea id="intent">אני צריך להגיע לעבודה עד 8:30, מעדיף כמה שפחות הליכה, ויש לי עשר דקות לקנות קפה בדרך.</textarea>
         <div class="examples" id="examples">
+          <button type="button" class="chip">מחר מרמת גן לעזריאלי, יוצא ב־7:40, בלי החלפות</button>
           <button type="button" class="chip">תמצא לי דרך בלי החלפה בתחנה המרכזית</button>
           <button type="button" class="chip">אני מוכן לאחר בחמש דקות אם אחסוך הליכה</button>
           <button type="button" class="chip">תן לי מסלול עם סיכוי גבוה לא לפספס את הרכבת</button>
@@ -374,13 +375,45 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 /* ---------------- intent: simple Hebrew phrase matching, no AI ---------------- */
 const NUMS = { 'אחת': 1, 'שתיים': 2, 'שתי': 2, 'שלוש': 3, 'ארבע': 4, 'חמש': 5, 'שש': 6, 'שבע': 7, 'שמונה': 8, 'תשע': 9, 'עשר': 10, 'רבע': 15, 'עשרים': 20, 'חצי': 30 };
 const numWord = s => /^\d+$/.test(s) ? Number(s) : NUMS[s];
+/* place words: known places by their usual names, anything else becomes a place named as the user wrote it */
+const PLACE_WORDS = { home: ['בית', 'הבית', 'הביתה'], work: ['עבודה', 'העבודה', 'משרד', 'המשרד'], uni: ['אוניברסיטה', 'האוניברסיטה'], gym: ['חדר כושר', 'חדר הכושר', 'הג׳ים', 'ג׳ים'] };
+const STOP = /^(?:עד|ב\S*|ו\S*|עם|כי|אם|היום|מחר|מחרתיים|לפני|אחרי|יוצא|יוצאת|לצאת|מעדיף|בלי|כמה|יש|צריך|ויש)$/;
+function placeKey(raw) {
+  let words = raw.trim().replace(/[,.!?]+$/, '').split(/\s+/);
+  while (words.length > 1 && STOP.test(words[words.length - 1].replace(/[,.!?]+$/, ''))) words.pop();
+  if (words.length > 1 && /[,.!?]$/.test(words[0])) words = [words[0]];   // "עזריאלי, יוצא": the place ends at the comma
+  const name = words.join(' ').replace(/[,.!?]+$/, '');
+  for (const [k, list] of Object.entries(PLACE_WORDS)) if (list.includes(name)) return { key: k, name };
+  if (!name || STOP.test(name)) return null;
+  const key = 'p:' + name;
+  if (!PLACES[key]) PLACES[key] = { name, detail: 'מהבקשה שלך', custom: true };
+  return { key, name };
+}
+const DAYS = { 'ראשון': 0, 'שני': 1, 'שלישי': 2, 'רביעי': 3, 'חמישי': 4, 'שישי': 5 };
 function parseIntent(text) {
   const c = {}, used = [];
-  const take = (re, fn) => { const m = text.match(re); if (m) { fn(m); used.push(m[0]); } };
+  // fn may return false (no match after all) or the part of the text it actually used
+  const take = (re, fn) => { const m = text.match(re); if (!m) return; const r = fn(m); if (r !== false) used.push(typeof r === 'string' ? r : m[0]); };
+  const upTo = (m, name) => m[0].slice(0, m[0].lastIndexOf(name) + name.length); // the match, cut after the place name
+  // trip details: from, to, day, departure or arrival time
+  take(/(?:^|\s)מ(?:ה(?=בית|עבודה|משרד|אוניברסיטה))?(\S+(?:\s\S+)?)\s+(?:ל|אל\s+)(?!הגיע|נסוע|צאת)(\S+(?:\s\S+)?)/, m => {
+    const f = placeKey(m[1]), t = placeKey(m[2]);
+    if (!f || !t) return false;
+    c.from = f.key; c.to = t.key;
+    return upTo(m, t.name);
+  });
+  if (!c.to) take(/(?:להגיע|לנסוע|לכיוון|נוסע|נוסעת|ללכת)\s+(?:ל|אל\s+)(\S+(?:\s\S+)?)/, m => { const t = placeKey(m[1]); if (!t) return false; c.to = t.key; return upTo(m, t.name); });
+  if (!c.to) take(/לעבודה|למשרד/, () => { c.to = 'work'; });
+  if (!c.to) take(/הביתה|לבית/, () => { c.to = 'home'; });
+  if (!c.to) take(/לאוניברסיטה/, () => { c.to = 'uni'; });
+  if (!c.from) take(/(?:יוצא|יוצאת|לצאת|נוסע|נוסעת)\s+מ(\S+(?:\s\S+)?)/, m => { const f = placeKey(m[1]); if (!f) return false; c.from = f.key; return upTo(m, f.name); });
+  if (!c.from) take(/מהבית/, () => { c.from = 'home'; });
+  if (!c.from) take(/מהעבודה|מהמשרד/, () => { c.from = 'work'; });
+  take(/מחרתיים|מחר|היום|ב?יום\s+(ראשון|שני|שלישי|רביעי|חמישי|שישי)|בשבת/, m => { c.day = m[1] ? 'ביום ' + m[1] : m[0] === 'בשבת' ? 'בשבת' : m[0]; });
   take(/(?:עד|לפני)\s*(?:ה?שעה\s*)?(\d{1,2})(?:[:.](\d{2}))?/, m => { c.arriveBy = Number(m[1]) * 60 + Number(m[2] || 0); });
-  take(/(?:לעבודה|למשרד)/, () => { c.to = 'work'; });
-  take(/(?:הביתה|לבית)/, () => { c.to = 'home'; });
-  take(/לאוניברסיטה/, () => { c.to = 'uni'; });
+  take(/(?:יוצא|יוצאת|לצאת|אצא|יציאה)\s*(?:ב[-־]?|בשעה\s*)?(\d{1,2})(?:[:.](\d{2}))?/, m => { c.departAt = Number(m[1]) * 60 + Number(m[2] || 0); });
+  if (c.departAt == null && c.arriveBy == null) take(/בשעה\s*(\d{1,2})(?:[:.](\d{2}))?/, m => { c.departAt = Number(m[1]) * 60 + Number(m[2] || 0); });
+  if (c.departAt == null) take(/עכשיו|כרגע/, () => { c.now = true; });
   take(/(?:פחות|מעט|בלי)\s+(?:ה)?ליכה|כמה שפחות הליכה|לא ללכת/, () => { c.lessWalk = true; });
   take(/בלי\s+החלפ(?:ה|ות)\s+ב(?:תחנה\s+)?(ה?\S+(?:\s+\S+)?)/, m => { const st = STATIONS.find(s => m[1].includes(s.replace('התחנה ', '')) || s.includes(m[1].replace(/^ה/, ''))) || m[1]; c.avoid = st; });
   if (!c.avoid) take(/בלי\s+החלפ(?:ה|ות)/, () => { c.noTransfer = true; });
@@ -391,11 +424,12 @@ function parseIntent(text) {
   // what was not understood: words left after removing the matched parts and filler
   let rest = text;
   for (const u of used) rest = rest.replace(u, ' ');
-  rest = rest.replace(/אני|צריך|רוצה|מעדיף|להגיע|ויש|יש|לי|בדרך|תמצא|תן|דרך|מסלול|עם|אם|אחסוך|מוכן|[,.!?]/g, ' ').replace(/\s+/g, ' ').trim();
+  rest = rest.replace(/אני|צריך|רוצה|מעדיף|להגיע|לנסוע|ויש|יש|לי|בדרך|תמצא|תן|דרך|מסלול|עם|אם|אחסוך|מוכן|ואני|ו?בבקשה|נוסע|נוסעת|[,.!?]/g, ' ').replace(/\s+/g, ' ').trim();
   return { c, rest: rest.split(' ').filter(w => w.length > 2).join(' ') };
 }
 const COND_TEXT = {
-  arriveBy: v => `הגעה עד <b class="num">${clock(v)}</b>`, to: v => `יעד: <b>${PLACES[v].name}</b>`, lessWalk: () => '<b>כמה שפחות הליכה</b>',
+  from: v => `מוצא: <b>${esc(PLACES[v].name)}</b>`, day: v => `<b>${esc(v)}</b>`, departAt: v => `יציאה ב־<b class="num">${clock(v)}</b>`, now: () => '<b>יציאה עכשיו</b>',
+  arriveBy: v => `הגעה עד <b class="num">${clock(v)}</b>`, to: v => `יעד: <b>${esc(PLACES[v].name)}</b>`, lessWalk: () => '<b>כמה שפחות הליכה</b>',
   avoid: v => `בלי החלפה ב<b>${esc(v)}</b>`, noTransfer: () => '<b>בלי החלפות</b>', reliable: () => '<b>לא לפספס</b> (אמינות גבוהה)', fast: () => '<b>הכי מהר</b>',
   lateOk: v => `מותר לאחר עד <b>${v}</b> דק׳ אם זה חוסך הליכה`, coffee: v => `<b>${v}</b> דק׳ לקפה בדרך`
 };
@@ -404,6 +438,7 @@ function applyIntent() {
   const { c, rest } = parseIntent($('intent').value);
   state.cond = c;
   if (c.to) state.to = c.to;
+  if (c.from) state.from = c.from;
   const w = { speed: prefs.speed, comfort: prefs.comfort, rel: prefs.rel };
   if (c.lessWalk) w.comfort = Math.max(w.comfort, 85);
   if (c.reliable) w.rel = Math.max(w.rel, 85);
@@ -413,10 +448,11 @@ function applyIntent() {
   syncOD();
 }
 function renderUnderstood(rest) {
-  const keys = Object.keys(state.cond);
+  const ORDER = ['from', 'to', 'day', 'now', 'departAt', 'arriveBy'];
+  const keys = Object.keys(state.cond).sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
   $('understood').innerHTML = keys.length
     ? keys.map(k => `<span class="cond">${condText(k, state.cond[k])}<button type="button" data-k="${k}" aria-label="הסרת התנאי">×</button></span>`).join('')
-    : '<span class="hint">עוד לא זיהיתי תנאים. אפשר לכתוב שעה, "פחות הליכה", "בלי החלפה" או "קפה".</span>';
+    : '<span class="hint">עוד לא זיהיתי פרטים. אפשר לכתוב מאיפה ולאן, יום ושעה, וגם "פחות הליכה", "בלי החלפה" או "קפה".</span>';
   $('unparsed').hidden = !rest;
   $('unparsed').textContent = rest ? `לא הבנתי את החלק: "${rest}". אם זה חשוב, נסח אחרת או בחר בהעדפות.` : '';
 }
@@ -435,7 +471,9 @@ function evaluate(o) {
   const rides = o.segs.filter(s => ['bus', 'rail', 'lrt'].includes(s.type));
   const transfers = Math.max(0, rides.length - 1);
   const xferAt = o.segs.filter(s => s.xfer).map(s => s.at);
-  const depart = c.arriveBy ? Math.max(NOW, c.arriveBy - total) : NOW;
+  // a day other than today, or a set departure time, plans ahead: the demo clock no longer limits the departure
+  const ahead = c.day && c.day !== 'היום';
+  const depart = c.departAt != null ? c.departAt : c.arriveBy ? (ahead ? c.arriveBy - total : Math.max(NOW, c.arriveBy - total)) : NOW;
   const arrive = depart + total;
   const late = c.arriveBy ? Math.max(0, arrive - c.arriveBy) : 0;
   const comfort = Math.max(0, Math.min(1, 1 - walk / 50 - transfers * .1 - wait / 90));
@@ -480,7 +518,7 @@ function renderCards(animate) {
   }
   const c = state.cond;
   $('opt-title').textContent = `${PLACES[state.from].name} ← ${PLACES[state.to].name}`;
-  $('cond-line').innerHTML = [c.arriveBy ? `צריך להגיע עד ${clock(c.arriveBy)}` : `יציאה עכשיו, ${clock(NOW)}`, c.coffee ? `${c.coffee} דק׳ לקפה` : '', c.lateOk ? `מותר איחור של ${c.lateOk} דק׳` : ''].filter(Boolean).join(' · ') + '. הזז את המחוונים והדירוג ישתנה.';
+  $('cond-line').innerHTML = [c.day || '', c.departAt != null ? `יציאה ב־${clock(c.departAt)}` : '', c.arriveBy ? `צריך להגיע עד ${clock(c.arriveBy)}` : c.departAt == null ? `יציאה עכשיו, ${clock(NOW)}` : '', c.coffee ? `${c.coffee} דק׳ לקפה` : '', c.lateOk ? `מותר איחור של ${c.lateOk} דק׳` : ''].filter(Boolean).join(' · ') + '. הזז את המחוונים והדירוג ישתנה.';
   renderStage();
 }
 function card(o, i, best) {
@@ -653,7 +691,7 @@ $('swap').onclick = () => { [state.from, state.to] = [state.to, state.from]; syn
 $('saved').addEventListener('click', e => { const b = e.target.closest('[data-to]'); if (b) { state.to = b.dataset.to; syncOD(); } });
 $('go').onclick = () => {
   if (state.from === state.to) { toast('המוצא והיעד זהים. בחר יעד אחר.'); return; }
-  if (!(state.from === 'home' && state.to === 'work')) toast('בהדגמה יש מסלולים רק מהבית לעבודה. מציג אותם.');
+  if (!(state.from === 'home' && state.to === 'work')) toast(`הבנתי ${PLACES[state.from].name} ← ${PLACES[state.to].name}. בהדגמה יש מסלולים רק מהבית לעבודה, אז אני מציג אותם.`);
   state.from = 'home'; state.to = 'work'; state.selected = null; state.surprise = null; syncOD(); show('options');
 };
 for (const k of ['speed', 'comfort', 'rel']) $('w-' + k).addEventListener('input', e => { $('o-' + k).textContent = e.target.value; state.selected = null; renderCards(true); });

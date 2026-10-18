@@ -11,3 +11,7 @@
 - `scripts/build_prototype.py`: בונה את `prototype-web/dist/index.html` עם קובץ היום השלם הכי חדש.
 - זמן אמת: `docs/REALTIME.md` (זמני: Open Bus Stride; פעיל רק כשקובץ הנתונים הוא של היום).
 - `tests/routing_test.js`: בדיקות מנוע המסלולים (`node tests/routing_test.js`).
+
+## אפיון Adaptive Mobility
+- `docs/PRODUCT_SPEC_ADAPTIVE_MOBILITY.md`: גרסה 2.0, הרחבה מלאה של אפיון Adaptive Mobility 1.4 (דרישות עם מזהים, מנוע וניקוד, למידה אישית, API, פרטיות, נגישות, בדיקות). פרק 27 מפרט את הפערים מול החלטות המאגר.
+- הגרסה המקורית (1.4): `docs/archive/PRODUCT_SPEC_Adaptive_Mobility_v1.4.md`.
